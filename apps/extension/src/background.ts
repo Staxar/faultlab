@@ -5,6 +5,9 @@ import {
   type RecordedEvent,
   type RecordedRequest,
   type DetectedIssue,
+  type Scenario,
+  type FaultRule,
+  type RecordedEvent as RuntimeRecordedEvent,
   type RuntimeMessage,
   type RuntimeState,
 } from "@faultlab/core";
@@ -12,87 +15,151 @@ import { ChromeNetworkAdapter } from "./background/network-adapter";
 import { isRuntimeMessage } from "./shared/messages";
 
 const KEY = "faultlab.runtime";
+const MAX_PERSISTED_ITEMS = 500;
 const networkAdapter = new ChromeNetworkAdapter();
 let stateOperation = Promise.resolve();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isPersistedRule(value: unknown): value is FaultRule {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string" || typeof value.enabled !== "boolean" || !isRecord(value.matcher) || !isRecord(value.action)) return false;
+  const actionType = value.action.type;
+  if (![
+    "error",
+    "delay",
+    "throttle",
+    "mutate",
+    "offline",
+  ].includes(String(actionType)) || typeof value.action.probability !== "number") return false;
+  if (value.maxApplications !== undefined && typeof value.maxApplications !== "number") return false;
+  const matcher = value.matcher;
+  if (matcher.urlIncludes !== undefined && typeof matcher.urlIncludes !== "string") return false;
+  if (matcher.graphqlOperationName !== undefined && typeof matcher.graphqlOperationName !== "string") return false;
+  if (matcher.methods !== undefined && (!Array.isArray(matcher.methods) || matcher.methods.some((method) => typeof method !== "string"))) return false;
+  if (matcher.resourceTypes !== undefined && (!Array.isArray(matcher.resourceTypes) || matcher.resourceTypes.some((type) => typeof type !== "string"))) return false;
+  if (actionType === "mutate" && (!Array.isArray(value.action.mutations) || value.action.mutations.some((mutation) => !isRecord(mutation) || typeof mutation.path !== "string" || typeof mutation.op !== "string"))) return false;
+  return true;
+}
+
+function normalizeScenario(value: unknown, defaultIds: Set<string>): Scenario | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string" || typeof value.description !== "string" || !Array.isArray(value.rules) || !value.rules.every(isPersistedRule)) return null;
+  const scenario = {
+    id: value.id,
+    name: value.name,
+    description: value.description,
+    builtIn: defaultIds.has(value.id) || value.builtIn === true,
+    rules: value.rules,
+  } as Scenario;
+  try {
+    return validateScenario(scenario) ? null : scenario;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeRecordedRequest(value: unknown): RecordedRequest | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.url !== "string" || typeof value.method !== "string") return null;
+  if (value.resourceType !== undefined && typeof value.resourceType !== "string") return null;
+  if (value.graphqlOperationName !== undefined && typeof value.graphqlOperationName !== "string") return null;
+  return {
+    id: value.id,
+    url: value.url,
+    method: value.method,
+    resourceType: value.resourceType,
+    graphqlOperationName: value.graphqlOperationName,
+  };
+}
+
+function normalizeRecordedEvent(value: unknown): RuntimeRecordedEvent | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp)) return null;
+  if (value.type === "navigation" && typeof value.url === "string") return value as RuntimeRecordedEvent;
+  if (value.type === "interaction" && (value.action === "click" || value.action === "change") && typeof value.target === "string") return value as RuntimeRecordedEvent;
+  return null;
+}
+
+function normalizeDetectedIssue(value: unknown): DetectedIssue | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp) || typeof value.tabId !== "number" || typeof value.message !== "string") return null;
+  if (!["console", "network", "runtime", "unhandledrejection"].includes(String(value.type))) return null;
+  return value as DetectedIssue;
+}
+
+function normalizeRuntimeState(value: unknown): RuntimeState | null {
+  if (!isRecord(value) || !Array.isArray(value.scenarios)) return null;
+  const defaultIds = new Set(defaultScenarios.map((scenario) => scenario.id));
+  const scenarios: Scenario[] = [];
+  const scenarioIds = new Set<string>();
+  for (const candidate of value.scenarios) {
+    const scenario = normalizeScenario(candidate, defaultIds);
+    if (scenario && !scenarioIds.has(scenario.id)) {
+      scenarioIds.add(scenario.id);
+      scenarios.push(scenario);
+    }
+  }
+  for (const scenario of defaultScenarios) {
+    if (!scenarioIds.has(scenario.id)) {
+      scenarioIds.add(scenario.id);
+      scenarios.push(scenario);
+    }
+  }
+  const recorderValue = isRecord(value.recorder) ? value.recorder : {};
+  const recorderTabId = typeof recorderValue.tabId === "number" ? recorderValue.tabId : null;
+  const recorderRequests = Array.isArray(recorderValue.requests) ? recorderValue.requests.map(normalizeRecordedRequest).filter((request): request is RecordedRequest => request !== null) : [];
+  const recorderEvents = Array.isArray(recorderValue.events) ? recorderValue.events.map(normalizeRecordedEvent).filter((event): event is RuntimeRecordedEvent => event !== null) : [];
+  const monitorValue = isRecord(value.errorMonitor) ? value.errorMonitor : {};
+  const monitorTabId = typeof monitorValue.tabId === "number" ? monitorValue.tabId : null;
+  const issues = Array.isArray(monitorValue.issues) ? monitorValue.issues.map(normalizeDetectedIssue).filter((issue): issue is DetectedIssue => issue !== null) : [];
+  const activeScenarioId = typeof value.activeScenarioId === "string" && scenarioIds.has(value.activeScenarioId) && value.enabled === true ? value.activeScenarioId : null;
+  return {
+    enabled: value.enabled === true && activeScenarioId !== null,
+    activeScenarioId,
+    scenarios,
+    recorder: {
+      active: recorderValue.active === true && recorderTabId !== null,
+      tabId: recorderTabId,
+      requests: recorderRequests.slice(-MAX_PERSISTED_ITEMS),
+      events: recorderEvents.slice(-MAX_PERSISTED_ITEMS),
+    },
+    errorMonitor: {
+      active: monitorValue.active === true && monitorTabId !== null,
+      tabId: monitorTabId,
+      issues: issues.slice(-MAX_PERSISTED_ITEMS),
+    },
+  };
+}
+
 async function getState(): Promise<RuntimeState> {
   const stored = await chrome.storage.local.get(KEY);
-  const storedState = stored[KEY] as RuntimeState | undefined;
+  const storedState = normalizeRuntimeState(stored[KEY]);
   if (storedState) {
-    const defaultIds = new Set(defaultScenarios.map((scenario) => scenario.id));
-    const migratedScenarios = storedState.scenarios.map((scenario) => ({
-      ...scenario,
-      builtIn: scenario.builtIn ?? defaultIds.has(scenario.id),
-    }));
-    const storedRecorder = storedState.recorder ?? {};
-    const storedTabId =
-      typeof storedRecorder.tabId === "number" ? storedRecorder.tabId : null;
-    const normalizedRecorder = {
-      active: storedRecorder.active === true && storedTabId !== null,
-      tabId: storedTabId,
-      requests: Array.isArray(storedRecorder.requests)
-        ? storedRecorder.requests
-        : [],
-      events: Array.isArray(storedRecorder.events)
-        ? storedRecorder.events
-        : [],
-    };
-    const storedErrorMonitor = storedState.errorMonitor ?? {};
-    const normalizedErrorMonitor = {
-      active:
-        storedErrorMonitor.active === true &&
-        typeof storedErrorMonitor.tabId === "number",
-      tabId:
-        typeof storedErrorMonitor.tabId === "number"
-          ? storedErrorMonitor.tabId
-          : null,
-      issues: Array.isArray(storedErrorMonitor.issues)
-        ? storedErrorMonitor.issues
-        : ([] as DetectedIssue[]),
-    };
     networkAdapter.restoreRecordedRequests(
-      normalizedRecorder.requests,
-      normalizedRecorder.events,
+      storedState.recorder.requests,
+      storedState.recorder.events,
     );
-    networkAdapter.restoreDetectedIssues(normalizedErrorMonitor.issues);
-    const liveRequests = networkAdapter.getRecordedRequests();
-    const recorder = normalizedRecorder.active
-      ? {
-          ...normalizedRecorder,
-          requests: liveRequests,
-          events: networkAdapter.getRecordedEvents(),
-        }
-      : normalizedRecorder;
-    const knownIds = new Set(
-      storedState.scenarios.map((scenario) => scenario.id),
-    );
-    const missingDefaults = defaultScenarios.filter(
-      (scenario) => !knownIds.has(scenario.id),
-    );
-    if (
-      missingDefaults.length === 0 &&
-      storedState.recorder !== undefined &&
-      migratedScenarios.every(
-        (scenario, index) =>
-          scenario.builtIn === storedState.scenarios[index].builtIn,
-      )
-    )
-      return {
-        ...storedState,
-        scenarios: migratedScenarios,
-        recorder,
-        errorMonitor: normalizedErrorMonitor,
-      };
-    const migratedState = {
+    networkAdapter.restoreDetectedIssues(storedState.errorMonitor.issues);
+    const liveState = {
       ...storedState,
-      scenarios: [...migratedScenarios, ...missingDefaults],
-      recorder,
-      errorMonitor: normalizedErrorMonitor,
+      recorder: storedState.recorder.active
+        ? {
+            ...storedState.recorder,
+            requests: networkAdapter.getRecordedRequests(),
+            events: networkAdapter.getRecordedEvents(),
+          }
+        : storedState.recorder,
+      errorMonitor: storedState.errorMonitor.active
+        ? {
+            ...storedState.errorMonitor,
+            issues: networkAdapter.getDetectedIssues(),
+          }
+        : storedState.errorMonitor,
     };
-    await chrome.storage.local.set({ [KEY]: migratedState });
-    return migratedState;
+    if (JSON.stringify(stored[KEY]) !== JSON.stringify(liveState)) {
+      await chrome.storage.local.set({ [KEY]: liveState });
+    }
+    return liveState;
   }
-  const state = {
+  const state: RuntimeState = {
     enabled: false,
     activeScenarioId: null,
     scenarios: defaultScenarios,
@@ -170,7 +237,7 @@ chrome.runtime.onMessage.addListener(
     const operation = stateOperation.then(async () => {
       const state = await getState();
       if (typedMessage.type === "GET_STATE") {
-        if (state.errorMonitor.active) {
+        if (state.recorder.active || state.errorMonitor.active) {
           await syncNetwork(state);
           const liveState = {
             ...state,
@@ -229,9 +296,65 @@ chrome.runtime.onMessage.addListener(
         if (typedMessage.enabled && state.recorder.active) {
           return { ok: false, error: "Stop recording before enabling chaos" };
         }
-        const next = { ...state, enabled: typedMessage.enabled };
+        if (typedMessage.enabled && state.activeScenarioId === null) {
+          return { ok: false, error: "Select a scenario before enabling chaos" };
+        }
+        const next = {
+          ...state,
+          enabled: typedMessage.enabled,
+          activeScenarioId: typedMessage.enabled
+            ? state.activeScenarioId
+            : null,
+        };
         await chrome.storage.local.set({ [KEY]: next });
         await syncNetwork(next);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "ACTIVATE_SCENARIO") {
+        if (state.recorder.active) {
+          return {
+            ok: false,
+            error: "Stop recording before activating a scenario",
+          };
+        }
+        const scenario = state.scenarios.find(
+          (candidate) => candidate.id === typedMessage.scenarioId,
+        );
+        if (!scenario) return { ok: false, error: "Unknown scenario" };
+        const next = {
+          ...state,
+          enabled: true,
+          activeScenarioId: scenario.id,
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        try {
+          await syncNetwork(next);
+        } catch (error) {
+          await chrome.storage.local.set({ [KEY]: state });
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not activate scenario",
+          };
+        }
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "DEACTIVATE_SCENARIO") {
+        const next = { ...state, enabled: false, activeScenarioId: null };
+        await chrome.storage.local.set({ [KEY]: next });
+        try {
+          await syncNetwork(next);
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not deactivate scenario",
+          };
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "UPDATE_SCENARIO") {
@@ -255,9 +378,6 @@ chrome.runtime.onMessage.addListener(
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
-          if (state.recorder.active) {
-            return { ok: false, error: "Stop recording before activating a scenario" };
-          }
         await syncNetwork(next);
         return { ok: true, state: next };
       }
@@ -325,6 +445,12 @@ chrome.runtime.onMessage.addListener(
         if (activeTabId == null) {
           return { ok: false, error: "No active tab to record" };
         }
+        if (
+          state.errorMonitor.active &&
+          state.errorMonitor.tabId !== activeTabId
+        ) {
+          return { ok: false, error: "Stop monitoring on the other tab first" };
+        }
         networkAdapter.clearRecordedRequests();
         const next = {
           ...state,
@@ -366,6 +492,12 @@ chrome.runtime.onMessage.addListener(
           state.recorder.tabId !== activeTabId
         ) {
           return { ok: false, error: "Stop recording on the other tab first" };
+        }
+        if (
+          state.errorMonitor.active &&
+          state.errorMonitor.tabId !== activeTabId
+        ) {
+          return { ok: false, error: "Stop monitoring on the other tab first" };
         }
         networkAdapter.clearDetectedIssues();
         const next = {
