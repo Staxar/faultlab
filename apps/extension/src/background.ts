@@ -5,6 +5,7 @@ import {
   type RecordedEvent,
   type RecordedRequest,
   type DetectedIssue,
+  type FaultInjection,
   type Scenario,
   type FaultRule,
   type RecordedEvent as RuntimeRecordedEvent,
@@ -82,7 +83,38 @@ function normalizeRecordedEvent(value: unknown): RuntimeRecordedEvent | null {
 function normalizeDetectedIssue(value: unknown): DetectedIssue | null {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp) || typeof value.tabId !== "number" || typeof value.message !== "string") return null;
   if (!["console", "network", "runtime", "unhandledrejection"].includes(String(value.type))) return null;
-  return value as DetectedIssue;
+  if (
+    (value.source !== undefined && typeof value.source !== "string") ||
+    (value.url !== undefined && typeof value.url !== "string") ||
+    (value.status !== undefined && typeof value.status !== "number") ||
+    (value.injectionId !== undefined && typeof value.injectionId !== "string") ||
+    (value.scenarioId !== undefined && typeof value.scenarioId !== "string") ||
+    (value.ruleId !== undefined && typeof value.ruleId !== "string") ||
+    (value.requestId !== undefined && typeof value.requestId !== "string")
+  ) return null;
+  return {
+    id: value.id,
+    timestamp: value.timestamp,
+    tabId: value.tabId,
+    type: value.type as DetectedIssue["type"],
+    message: value.message,
+    ...(typeof value.source === "string" ? { source: value.source } : {}),
+    ...(typeof value.url === "string" ? { url: value.url } : {}),
+    ...(typeof value.status === "number" ? { status: value.status } : {}),
+    ...(typeof value.injectionId === "string" ? { injectionId: value.injectionId } : {}),
+    ...(typeof value.scenarioId === "string" ? { scenarioId: value.scenarioId } : {}),
+    ...(typeof value.ruleId === "string" ? { ruleId: value.ruleId } : {}),
+    ...(typeof value.requestId === "string" ? { requestId: value.requestId } : {}),
+  };
+}
+
+function normalizeFaultInjection(value: unknown): FaultInjection | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp) || typeof value.tabId !== "number" || typeof value.url !== "string" || typeof value.method !== "string" || typeof value.ruleId !== "string" || typeof value.action !== "string") return null;
+  if (value.requestId !== undefined && typeof value.requestId !== "string") return null;
+  if (value.scenarioId !== undefined && typeof value.scenarioId !== "string") return null;
+  if (value.status !== undefined && typeof value.status !== "number") return null;
+  if (!["error", "delay", "throttle", "mutate", "offline"].includes(value.action)) return null;
+  return value as unknown as FaultInjection;
 }
 
 function normalizeRuntimeState(value: unknown): RuntimeState | null {
@@ -110,6 +142,7 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
   const monitorValue = isRecord(value.errorMonitor) ? value.errorMonitor : {};
   const monitorTabId = typeof monitorValue.tabId === "number" ? monitorValue.tabId : null;
   const issues = Array.isArray(monitorValue.issues) ? monitorValue.issues.map(normalizeDetectedIssue).filter((issue): issue is DetectedIssue => issue !== null) : [];
+  const injections = Array.isArray(monitorValue.injections) ? monitorValue.injections.map(normalizeFaultInjection).filter((injection): injection is FaultInjection => injection !== null) : [];
   const activeScenarioId = typeof value.activeScenarioId === "string" && scenarioIds.has(value.activeScenarioId) && value.enabled === true ? value.activeScenarioId : null;
   return {
     enabled: value.enabled === true && activeScenarioId !== null,
@@ -125,6 +158,7 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
       active: monitorValue.active === true && monitorTabId !== null,
       tabId: monitorTabId,
       issues: issues.slice(-MAX_PERSISTED_ITEMS),
+      injections: injections.slice(-MAX_PERSISTED_ITEMS),
     },
   };
 }
@@ -137,7 +171,10 @@ async function getState(): Promise<RuntimeState> {
       storedState.recorder.requests,
       storedState.recorder.events,
     );
-    networkAdapter.restoreDetectedIssues(storedState.errorMonitor.issues);
+    networkAdapter.restoreDetectedIssues(
+      storedState.errorMonitor.issues,
+      storedState.errorMonitor.injections,
+    );
     const liveState = {
       ...storedState,
       recorder: storedState.recorder.active
@@ -151,6 +188,7 @@ async function getState(): Promise<RuntimeState> {
         ? {
             ...storedState.errorMonitor,
             issues: networkAdapter.getDetectedIssues(),
+            injections: networkAdapter.getFaultInjections(),
           }
         : storedState.errorMonitor,
     };
@@ -164,7 +202,7 @@ async function getState(): Promise<RuntimeState> {
     activeScenarioId: null,
     scenarios: defaultScenarios,
     recorder: { active: false, tabId: null, requests: [], events: [] },
-    errorMonitor: { active: false, tabId: null, issues: [] },
+    errorMonitor: { active: false, tabId: null, issues: [], injections: [] },
   };
   await chrome.storage.local.set({ [KEY]: state });
   return state;
@@ -198,6 +236,7 @@ async function syncNetwork(state: RuntimeState, tabId?: number): Promise<void> {
     scenario?.rules ?? [],
     state.recorder.active,
     state.errorMonitor.active,
+    state.activeScenarioId ?? undefined,
   );
 }
 
@@ -244,6 +283,7 @@ chrome.runtime.onMessage.addListener(
             errorMonitor: {
               ...state.errorMonitor,
               issues: networkAdapter.getDetectedIssues(),
+              injections: networkAdapter.getFaultInjections(),
             },
           };
           return { ok: true, state: liveState };
@@ -287,6 +327,7 @@ chrome.runtime.onMessage.addListener(
           errorMonitor: {
             ...state.errorMonitor,
             issues: networkAdapter.getDetectedIssues(),
+            injections: networkAdapter.getFaultInjections(),
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -502,7 +543,12 @@ chrome.runtime.onMessage.addListener(
         networkAdapter.clearDetectedIssues();
         const next = {
           ...state,
-          errorMonitor: { active: true, tabId: activeTabId, issues: [] },
+          errorMonitor: {
+            active: true,
+            tabId: activeTabId,
+            issues: [],
+            injections: [],
+          },
         };
         await chrome.storage.local.set({ [KEY]: next });
         await syncNetwork(next, activeTabId);
@@ -515,6 +561,7 @@ chrome.runtime.onMessage.addListener(
             active: false,
             tabId: null,
             issues: networkAdapter.getDetectedIssues(),
+            injections: networkAdapter.getFaultInjections(),
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -525,7 +572,7 @@ chrome.runtime.onMessage.addListener(
         networkAdapter.clearDetectedIssues();
         const next = {
           ...state,
-          errorMonitor: { ...state.errorMonitor, issues: [] },
+          errorMonitor: { ...state.errorMonitor, issues: [], injections: [] },
         };
         await chrome.storage.local.set({ [KEY]: next });
         return { ok: true, state: next };

@@ -35,6 +35,13 @@ receives runtime error messages from its content script. Issue messages, source 
 stored locally under `faultlab.runtime`; request bodies and form values are not collected by the error
 monitor. Monitoring is disabled until the user starts it and can be stopped or cleared from the Side Panel.
 
+## Correlation
+
+Error Observatory may associate an issue with request URL, scenario ID, rule ID, action, and timestamps.
+This metadata remains local and is bounded with the issue list. Correlation never requires persisting a
+request body or response body. URL/query redaction is required before any future export or external
+integration.
+
 ## Sanitization
 
 Authorization

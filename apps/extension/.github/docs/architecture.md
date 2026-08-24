@@ -53,3 +53,7 @@ Side Panel
 -> `Fetch.fulfillRequest` with the mutated response
 
 If the body is not valid JSON or cannot be read, the adapter continues the original response unchanged with `Fetch.continueResponse`. Unexpected request and response errors also use a best-effort continuation path; restricted pages and detached tabs remain browser limitations.
+
+While monitoring is active, the adapter records successful injections and enriches later issues with the
+nearest request/scenario/rule context when available. Core groups the resulting issues into local findings;
+this correlation is best-effort until CDP request identities are shared across Fetch and Network events.

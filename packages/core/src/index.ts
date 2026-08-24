@@ -76,9 +76,76 @@ export type DetectedIssue = {
   source?: string;
   url?: string;
   status?: number;
+  injectionId?: string;
+  scenarioId?: string;
+  ruleId?: string;
+  requestId?: string;
 };
 
 export type ReportedIssue = Omit<DetectedIssue, "tabId">;
+
+export type FaultInjection = {
+  id: string;
+  timestamp: number;
+  tabId: number;
+  requestId?: string;
+  url: string;
+  method: string;
+  scenarioId?: string;
+  ruleId: string;
+  action: RuleAction["type"];
+  status?: number;
+};
+
+export type ErrorFinding = {
+  id: string;
+  type: DetectedIssue["type"];
+  message: string;
+  source?: string;
+  url?: string;
+  scenarioId?: string;
+  ruleId?: string;
+  injectionId?: string;
+  count: number;
+  firstSeen: number;
+  lastSeen: number;
+};
+
+export function groupDetectedIssues(issues: DetectedIssue[]): ErrorFinding[] {
+  const findings = new Map<string, ErrorFinding>();
+  for (const issue of issues) {
+    const key = [
+      issue.type,
+      issue.message,
+      issue.source ?? "",
+      issue.url ?? "",
+      issue.scenarioId ?? "",
+      issue.ruleId ?? "",
+      issue.injectionId ?? "",
+    ].join("\u0000");
+    const existing = findings.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.firstSeen = Math.min(existing.firstSeen, issue.timestamp);
+      existing.lastSeen = Math.max(existing.lastSeen, issue.timestamp);
+      continue;
+    }
+    findings.set(key, {
+      id: `finding-${findings.size + 1}`,
+      type: issue.type,
+      message: issue.message,
+      source: issue.source,
+      url: issue.url,
+      scenarioId: issue.scenarioId,
+      ruleId: issue.ruleId,
+      injectionId: issue.injectionId,
+      count: 1,
+      firstSeen: issue.timestamp,
+      lastSeen: issue.timestamp,
+    });
+  }
+  return [...findings.values()].sort((left, right) => right.lastSeen - left.lastSeen);
+}
 
 export interface RuntimeState {
   enabled: boolean;
@@ -94,6 +161,7 @@ export interface RuntimeState {
     active: boolean;
     tabId: number | null;
     issues: DetectedIssue[];
+    injections: FaultInjection[];
   };
 }
 

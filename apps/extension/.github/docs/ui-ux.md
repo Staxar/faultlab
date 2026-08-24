@@ -65,6 +65,13 @@ The error monitor is a separate Side Panel workflow:
 
 Monitoring must show an explicit active state and keep messages and sources truncated. It must not imply that issues are sent to a server or collected from other tabs.
 
+## Error Observatory
+
+Show repeated issues as one finding with an occurrence count and latest timestamp. When correlation is
+available, show the scenario, rule action, and request context below the issue message. Keep the raw issue
+list local and bounded; do not display request or response bodies in this view. A missing correlation must
+be represented as missing context, not as a guessed scenario.
+
 ## Local-First Behavior
 
 Draft and saved configuration stays in Chrome local storage. The UI should never imply that scenarios are shared, synchronized, or active in every tab when the adapter only controls the selected tab.

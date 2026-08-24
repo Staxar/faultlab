@@ -25,3 +25,8 @@ response with `Fetch.getResponseBody`, delegates transformation to `packages/cor
 response with `Fetch.fulfillRequest`. Invalid, unreadable, non-JSON, and oversized bodies use response
 passthrough. Unexpected adapter errors use best-effort continuation, but restricted pages or detached tabs
 can still prevent a successful continuation.
+
+Error Observatory derives grouped findings in the browser-neutral core from detected issues. The adapter
+records successful injections while monitoring is active and attaches the nearest matching injection context
+to later issues by request ID or a bounded time/origin heuristic. This is best-effort until a shared CDP
+request identity is introduced.

@@ -31,15 +31,26 @@ function isScenarioMessage(value: unknown): value is Scenario {
       }
       const matcher = candidate.matcher as Record<string, unknown>;
       if (
-        (matcher.methods !== undefined && !Array.isArray(matcher.methods)) ||
+        (matcher.methods !== undefined &&
+          (!Array.isArray(matcher.methods) ||
+            matcher.methods.some((method) => typeof method !== "string"))) ||
         (matcher.resourceTypes !== undefined &&
-          !Array.isArray(matcher.resourceTypes))
+          (!Array.isArray(matcher.resourceTypes) ||
+            matcher.resourceTypes.some((type) => typeof type !== "string")))
       ) {
         return true;
       }
       const action = candidate.action as Record<string, unknown>;
       return (
-        action.type === "mutate" && !Array.isArray(action.mutations)
+        action.type === "mutate" &&
+        (!Array.isArray(action.mutations) ||
+          action.mutations.some(
+            (mutation) =>
+              typeof mutation !== "object" ||
+              mutation === null ||
+              typeof (mutation as Record<string, unknown>).path !== "string" ||
+              typeof (mutation as Record<string, unknown>).op !== "string",
+          ))
       );
     })
   ) {
