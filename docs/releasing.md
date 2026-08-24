@@ -1,0 +1,137 @@
+# Releasing FaultLab
+
+This document describes the first `0.1.0` release and the process for future updates.
+
+## Release policy
+
+`0.1.0` is the first public snapshot of the current MVP. It includes:
+
+- network latency, bandwidth throttling, offline failures, delays, and HTTP failures;
+- JSON response mutation for Fetch/XHR responses;
+- built-in preset configuration and reset;
+- discovery of observed endpoints, GraphQL operations, and JSON fields;
+- local runtime state for the selected tab.
+
+Custom scenario CRUD, application limits, request-body mutation, and multi-tab orchestration are not part of this release.
+
+Use semantic versioning for later releases:
+
+- `0.1.x` for backwards-compatible fixes and documentation updates;
+- `0.2.0` for the next backwards-compatible feature set;
+- `1.0.0` when the public API and product scope are considered stable.
+
+## Before the first release
+
+Requirements:
+
+- Node.js 20 or newer;
+- pnpm 10 or newer;
+- Chrome or Chromium;
+- a Git remote, if the source release will be hosted on GitHub.
+
+From the repository root:
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm build
+git diff --check
+```
+
+Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `sidepanel.html`, and the generated assets. Load `apps/extension/dist` as an unpacked extension from `chrome://extensions` and manually verify:
+
+- the Side Panel opens;
+- Backend Down, Slow Network, Offline, and Bad Data can be activated;
+- the selected tab is affected and another tab is not;
+- stopping a scenario restores normal requests;
+- invalid, non-JSON, and unreadable response bodies pass through unchanged;
+- endpoint, GraphQL operation, and JSON field discovery works after browsing a test page.
+
+## Prepare the source release
+
+The repository currently starts without Git history. Create the first history as focused commits. The intended order is:
+
+1. `chore: establish FaultLab MVP baseline` - workspace configuration, packages, extension shell, and initial documentation;
+2. `feat(core): add JSON response mutation rules` - browser-independent mutation types, validation, matching, and transformations;
+3. `feat(extension): intercept and mutate JSON responses` - debugger adapter and response-stage handling;
+4. `feat(extension): add configurable built-in presets` - runtime messages, validation, persistence, reset, and Side Panel editor;
+5. `feat(extension): discover request data` - endpoints, GraphQL operations, JSON paths, and selectors;
+6. `docs: document the 0.1.0 release` - release scope, architecture corrections, roadmap, and this guide;
+7. `chore(release): prepare v0.1.0` - final manifest and release metadata.
+
+Because the starting files are all untracked, these commits describe the current file groups rather than reconstructing the exact historical order in which features were implemented. Do not commit generated `dist` output unless the project later adopts that policy.
+
+Stage each group with explicit paths, review it, and commit it:
+
+```bash
+git add .gitignore .vscode package.json pnpm-workspace.yaml pnpm-lock.yaml \
+  AGENTS.md apps/extension/package.json apps/extension/tsconfig.json \
+  apps/extension/vite.config.ts packages/core/package.json \
+  packages/core/tsconfig.json
+
+git diff --cached --check
+git commit -m "chore: establish FaultLab MVP baseline"
+```
+
+For the remaining groups, use `git add` with the relevant paths, then run `git diff --cached --check` and `git commit -m "..."` before moving to the next group. Review the complete history with:
+
+```bash
+git log --oneline --decorate
+```
+
+Create and publish the release tag only after the final validation:
+
+```bash
+git tag -a v0.1.0 -m "FaultLab 0.1.0"
+git push origin master
+git push origin v0.1.0
+```
+
+If the default branch is not `master`, replace it with the actual branch name.
+
+## Build the upload ZIP
+
+The ZIP must contain `manifest.json` at its root, not inside a `dist` directory:
+
+```bash
+rm -f faultlab-0.1.0.zip
+(cd apps/extension/dist && zip -r ../../../faultlab-0.1.0.zip .)
+unzip -l faultlab-0.1.0.zip
+```
+
+Check the archive manually and upload `faultlab-0.1.0.zip`. Keep the ZIP outside `apps/extension/dist` so it cannot be included in a later build accidentally.
+
+## Publish on GitHub
+
+1. Push the branch and tag.
+2. Open the repository's Releases page.
+3. Create a release from tag `v0.1.0`.
+4. Use `FaultLab 0.1.0` as the title.
+5. Attach `faultlab-0.1.0.zip` and describe the included capabilities and known limitations from the release policy above.
+6. Mark it as the first public release when the source and package are ready.
+
+## Publish on the Chrome Web Store
+
+1. Register for a Chrome Web Store developer account and complete the one-time registration payment, if required by Google.
+2. Create a new item in the Developer Dashboard.
+3. Upload `faultlab-0.1.0.zip`.
+4. Complete the store listing: name, short description, detailed description, category, language, screenshots, and promotional images where required.
+5. Explain the `debugger`, `storage`, `sidePanel`, and `tabs` permissions in the privacy practices and permission justification fields. State that runtime state is stored locally and that FaultLab does not require a backend.
+6. Provide a privacy policy URL if the dashboard requires one. The policy must match the actual data behavior of the extension.
+7. Check the listing preview, submit for review, and record the submitted version and review status.
+
+Do not claim that FaultLab never observes request data: the extension reads matched response bodies locally when JSON mutation is active. Do state that the data is processed locally and is not sent to a FaultLab service.
+
+## Future updates
+
+For every update:
+
+1. Decide whether the change is a patch or a minor feature release.
+2. Update the version in the root `package.json`, `apps/extension/package.json`, `packages/core/package.json`, and `apps/extension/manifest.json`.
+3. Update the current status and release notes in `README.md` and this guide.
+4. Run `pnpm typecheck`, `pnpm build`, and `git diff --check`.
+5. Build a ZIP with the new version in its filename.
+6. Commit the change, create an annotated tag such as `v0.1.1` or `v0.2.0`, and push both.
+7. Upload the new ZIP as a new Chrome Web Store submission and update the GitHub release.
+
+Keep the manifest version and package versions aligned. Chrome extension versions must use one to four dot-separated numeric components and must increase for every Web Store upload.
