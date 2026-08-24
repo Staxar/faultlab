@@ -39,6 +39,24 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
       typeof candidate.scenario === "object" && candidate.scenario !== null
     );
   }
+  if (
+    candidate.type === "START_RECORDING" ||
+    candidate.type === "STOP_RECORDING" ||
+    candidate.type === "CLEAR_RECORDING"
+  ) {
+    return true;
+  }
+  if (candidate.type === "CREATE_SCENARIO_FROM_RECORDING") {
+    const recordingCandidate = candidate as {
+      name?: unknown;
+      requestIds?: unknown;
+    };
+    return (
+      typeof recordingCandidate.name === "string" &&
+      Array.isArray(recordingCandidate.requestIds) &&
+      recordingCandidate.requestIds.every((id) => typeof id === "string")
+    );
+  }
   return (
     candidate.type === "ACTIVATE_SCENARIO" &&
     typeof candidate.scenarioId === "string"

@@ -44,10 +44,22 @@ export interface Scenario {
   rules: FaultRule[];
 }
 
+export interface RecordedRequest {
+  id: string;
+  url: string;
+  method: string;
+  resourceType?: string;
+  graphqlOperationName?: string;
+}
+
 export interface RuntimeState {
   enabled: boolean;
   activeScenarioId: string | null;
   scenarios: Scenario[];
+  recorder: {
+    active: boolean;
+    requests: RecordedRequest[];
+  };
 }
 
 const VALID_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
@@ -69,7 +81,15 @@ export type RuntimeMessage =
   | { type: "UPDATE_SCENARIO"; scenario: Scenario }
   | { type: "RESET_SCENARIO"; scenarioId: string }
   | { type: "CREATE_SCENARIO"; scenario: Scenario }
-  | { type: "DELETE_SCENARIO"; scenarioId: string };
+  | { type: "DELETE_SCENARIO"; scenarioId: string }
+  | { type: "START_RECORDING" }
+  | { type: "STOP_RECORDING" }
+  | { type: "CLEAR_RECORDING" }
+  | {
+      type: "CREATE_SCENARIO_FROM_RECORDING";
+      name: string;
+      requestIds: string[];
+    };
 
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";
@@ -181,6 +201,58 @@ export function matchesRule(rule: FaultRule, request: RequestContext): boolean {
   )
     return false;
   return true;
+}
+
+export function createScenarioFromRecordedRequests(
+  name: string,
+  requests: RecordedRequest[],
+  scenarioId: string,
+): Scenario {
+  const uniqueRequests = new Map<string, RecordedRequest>();
+  for (const request of requests) {
+    const endpoint = normalizeRecordedEndpoint(request.url);
+    const key = [
+      endpoint,
+      request.method.toUpperCase(),
+      request.resourceType ?? "",
+      request.graphqlOperationName ?? "",
+    ].join("|");
+    if (endpoint && !uniqueRequests.has(key)) {
+      uniqueRequests.set(key, { ...request, url: endpoint });
+    }
+  }
+
+  return {
+    id: scenarioId,
+    name: name.trim() || "Recorded scenario",
+    description: "Generated from locally recorded network requests.",
+    builtIn: false,
+    rules: [...uniqueRequests.values()].map((request, index) => ({
+      id: `recorded-rule-${index + 1}`,
+      name: `${request.method.toUpperCase()} ${request.url}`.slice(0, 50),
+      enabled: true,
+      matcher: {
+        urlIncludes: request.url,
+        methods: [request.method.toUpperCase()],
+        ...(request.resourceType
+          ? { resourceTypes: [request.resourceType] }
+          : {}),
+        ...(request.graphqlOperationName
+          ? { graphqlOperationName: request.graphqlOperationName }
+          : {}),
+      },
+      action: { type: "delay", delayMs: 800, probability: 1 },
+    })),
+  };
+}
+
+function normalizeRecordedEndpoint(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return value || undefined;
+  }
 }
 
 export function shouldApply(

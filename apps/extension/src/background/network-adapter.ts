@@ -5,9 +5,11 @@ import {
   matchesRule,
   shouldApply,
   type FaultRule,
+  type RecordedRequest,
 } from "@faultlab/core";
 
 const MAX_MUTATION_BODY_BYTES = 5 * 1024 * 1024;
+const MAX_RECORDED_REQUESTS = 500;
 
 type ResponseHeader = { name: string; value: string };
 
@@ -33,6 +35,10 @@ export class ChromeNetworkAdapter {
   private observedGraphqlOperations = new Set<string>();
   private observedJsonPaths = new Set<string>();
   private applicationCounts = new Map<string, number>();
+  private recording = false;
+  private recordedRequests: RecordedRequest[] = [];
+  private recordedRequestIds = new Set<string>();
+  private restoredRecordedRequests = false;
 
   constructor() {
     chrome.debugger.onEvent.addListener((source, method, params) => {
@@ -49,9 +55,13 @@ export class ChromeNetworkAdapter {
     });
   }
 
-  async applyRules(tabId: number, rules: FaultRule[]): Promise<void> {
+  async applyRules(
+    tabId: number,
+    rules: FaultRule[],
+    recording = false,
+  ): Promise<void> {
     const operation = this.operation.then(() =>
-      this.applyRulesNow(tabId, rules),
+      this.applyRulesNow(tabId, rules, recording),
     );
     this.operation = operation.then(
       () => undefined,
@@ -71,6 +81,24 @@ export class ChromeNetworkAdapter {
 
   getGraphqlOperations(): string[] {
     return [...this.observedGraphqlOperations].sort();
+  }
+
+  getRecordedRequests(): RecordedRequest[] {
+    return [...this.recordedRequests];
+  }
+
+  clearRecordedRequests(): void {
+    this.recordedRequests = [];
+    this.recordedRequestIds.clear();
+  }
+
+  restoreRecordedRequests(requests: RecordedRequest[]): void {
+    if (this.restoredRecordedRequests) return;
+    this.restoredRecordedRequests = true;
+    this.recordedRequests = requests.slice(-MAX_RECORDED_REQUESTS);
+    this.recordedRequestIds = new Set(
+      this.recordedRequests.map((request) => request.id),
+    );
   }
 
   getDiscoveredData(): {
@@ -95,6 +123,7 @@ export class ChromeNetworkAdapter {
   private async applyRulesNow(
     tabId: number,
     rules: FaultRule[],
+    recording: boolean,
   ): Promise<void> {
     if (this.attachedTabId !== tabId) {
       await this.stopNow();
@@ -140,6 +169,7 @@ export class ChromeNetworkAdapter {
             },
       );
       this.applicationCounts.clear();
+      this.recording = recording;
       this.rules = rules;
     } catch (error) {
       await this.stopNow();
@@ -150,6 +180,7 @@ export class ChromeNetworkAdapter {
 
   private async stopNow(): Promise<void> {
     this.rules = [];
+    this.recording = false;
     this.applicationCounts.clear();
     this.clearPendingTimeouts();
     if (this.attachedTabId == null) return;
@@ -185,6 +216,21 @@ export class ChromeNetworkAdapter {
     try {
       const graphqlOperationName = getGraphqlOperationName(event.request.postData);
       const endpoint = normalizeEndpoint(event.request.url);
+      const recordedId = `${tabId}:${event.requestId}`;
+      if (this.recording && !this.recordedRequestIds.has(recordedId)) {
+        this.recordedRequestIds.add(recordedId);
+        this.recordedRequests.push({
+          id: recordedId,
+          url: event.request.url,
+          method: event.request.method.toUpperCase(),
+          resourceType: event.resourceType?.toLowerCase(),
+          graphqlOperationName,
+        });
+        if (this.recordedRequests.length > MAX_RECORDED_REQUESTS) {
+          const removed = this.recordedRequests.shift();
+          if (removed) this.recordedRequestIds.delete(removed.id);
+        }
+      }
       if (endpoint) this.observedUrls.add(endpoint);
       if (graphqlOperationName) {
         this.observedGraphqlOperations.add(graphqlOperationName);

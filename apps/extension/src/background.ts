@@ -1,6 +1,8 @@
 import {
   defaultScenarios,
+  createScenarioFromRecordedRequests,
   validateScenario,
+  type RecordedRequest,
   type RuntimeMessage,
   type RuntimeState,
 } from "@faultlab/core";
@@ -20,6 +22,15 @@ async function getState(): Promise<RuntimeState> {
       ...scenario,
       builtIn: scenario.builtIn ?? defaultIds.has(scenario.id),
     }));
+    const storedRecorder = storedState.recorder ?? {
+      active: false,
+      requests: [] as RecordedRequest[],
+    };
+    networkAdapter.restoreRecordedRequests(storedRecorder.requests);
+    const liveRequests = networkAdapter.getRecordedRequests();
+    const recorder = storedRecorder.active
+      ? { ...storedRecorder, requests: liveRequests }
+      : storedRecorder;
     const knownIds = new Set(
       storedState.scenarios.map((scenario) => scenario.id),
     );
@@ -33,10 +44,11 @@ async function getState(): Promise<RuntimeState> {
           scenario.builtIn === storedState.scenarios[index].builtIn,
       )
     )
-      return { ...storedState, scenarios: migratedScenarios };
+      return { ...storedState, scenarios: migratedScenarios, recorder };
     const migratedState = {
       ...storedState,
       scenarios: [...migratedScenarios, ...missingDefaults],
+      recorder,
     };
     await chrome.storage.local.set({ [KEY]: migratedState });
     return migratedState;
@@ -45,6 +57,7 @@ async function getState(): Promise<RuntimeState> {
     enabled: false,
     activeScenarioId: null,
     scenarios: defaultScenarios,
+    recorder: { active: false, requests: [] },
   };
   await chrome.storage.local.set({ [KEY]: state });
   return state;
@@ -54,7 +67,7 @@ async function syncNetwork(state: RuntimeState, tabId?: number): Promise<void> {
   const scenario = state.scenarios.find(
     (candidate) => candidate.id === state.activeScenarioId,
   );
-  if (!state.enabled || !scenario) {
+  if ((!state.enabled || !scenario) && !state.recorder.active) {
     await networkAdapter.stop();
     return;
   }
@@ -67,7 +80,11 @@ async function syncNetwork(state: RuntimeState, tabId?: number): Promise<void> {
     return;
   }
 
-  await networkAdapter.applyRules(activeTabId, scenario.rules);
+  await networkAdapter.applyRules(
+    activeTabId,
+    scenario?.rules ?? [],
+    state.recorder.active,
+  );
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -213,6 +230,54 @@ chrome.runtime.onMessage.addListener(
         };
         await chrome.storage.local.set({ [KEY]: next });
         await syncNetwork(next);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "START_RECORDING") {
+        networkAdapter.clearRecordedRequests();
+        const next = {
+          ...state,
+          enabled: false,
+          activeScenarioId: null,
+          recorder: { active: true, requests: [] },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        await syncNetwork(next);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "STOP_RECORDING") {
+        const next = {
+          ...state,
+          recorder: {
+            active: false,
+            requests: networkAdapter.getRecordedRequests(),
+          },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        await syncNetwork(next);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "CLEAR_RECORDING") {
+        networkAdapter.clearRecordedRequests();
+        const next = { ...state, recorder: { ...state.recorder, requests: [] } };
+        await chrome.storage.local.set({ [KEY]: next });
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "CREATE_SCENARIO_FROM_RECORDING") {
+        const selected = state.recorder.requests.filter((request) =>
+          typedMessage.requestIds.includes(request.id),
+        );
+        if (selected.length === 0) {
+          return { ok: false, error: "Select at least one recorded request" };
+        }
+        const scenario = createScenarioFromRecordedRequests(
+          typedMessage.name,
+          selected,
+          `custom-${crypto.randomUUID()}`,
+        );
+        const validationError = validateScenario(scenario);
+        if (validationError) return { ok: false, error: validationError };
+        const next = { ...state, scenarios: [...state.scenarios, scenario] };
+        await chrome.storage.local.set({ [KEY]: next });
         return { ok: true, state: next };
       }
     });
