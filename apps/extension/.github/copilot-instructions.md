@@ -39,9 +39,9 @@ Implementation details:
 - The background service worker is emitted as `background.js`; update `manifest.json` when permissions or entry points change.
 - Use `pnpm typecheck` for workspace checks and `pnpm build` to produce `dist/` for loading as an unpacked extension.
 - `content/main.ts` is active for recorder navigation/click/change events and runtime/unhandled rejection
-	reports. Do not add UI mutation behavior there without an explicit design and permission review.
+  reports. Do not add UI mutation behavior there without an explicit design and permission review.
 - Recorder and error monitoring are local, bounded, selected-tab sessions. Persist only metadata needed by
-	the UI; do not persist request bodies, form values, or matched response bodies.
+  the UI; do not persist request bodies, form values, or matched response bodies.
 - Handle `ACTIVATE_SCENARIO` and `DEACTIVATE_SCENARIO` failures visibly. Every paused Fetch request or
-	response must have a best-effort continuation path when injection cannot be applied.
+  response must have a best-effort continuation path when injection cannot be applied.
 - `devtools/main.ts` is deferred; do not add DevTools permissions or entry points implicitly.

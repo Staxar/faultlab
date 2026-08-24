@@ -144,7 +144,9 @@ export function groupDetectedIssues(issues: DetectedIssue[]): ErrorFinding[] {
       lastSeen: issue.timestamp,
     });
   }
-  return [...findings.values()].sort((left, right) => right.lastSeen - left.lastSeen);
+  return [...findings.values()].sort(
+    (left, right) => right.lastSeen - left.lastSeen,
+  );
 }
 
 export interface RuntimeState {
@@ -173,7 +175,9 @@ const VALID_RESOURCE_TYPES = new Set([
   "script",
   "image",
 ]);
-const VALID_ERROR_STATUSES = new Set([401, 403, 404, 408, 429, 500, 502, 503, 504]);
+const VALID_ERROR_STATUSES = new Set([
+  401, 403, 404, 408, 429, 500, 502, 503, 504,
+]);
 
 export type RuntimeMessage =
   | { type: "GET_STATE" }
@@ -202,8 +206,10 @@ export type RuntimeMessage =
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";
   if (scenario.name.length > 50) return "Scenario name is too long";
-  if (scenario.description.length > 200) return "Scenario description is too long";
-  if (scenario.rules.length === 0) return "Scenario must contain at least one rule";
+  if (scenario.description.length > 200)
+    return "Scenario description is too long";
+  if (scenario.rules.length === 0)
+    return "Scenario must contain at least one rule";
 
   const ruleIds = new Set<string>();
   for (const rule of scenario.rules) {
@@ -228,34 +234,76 @@ export function validateScenario(scenario: Scenario): string | null {
     ) {
       return "GraphQL operation name is invalid";
     }
-    if (rule.matcher.methods?.some((method) => !VALID_METHODS.has(method.toUpperCase()))) {
+    if (
+      rule.matcher.methods?.some(
+        (method) => !VALID_METHODS.has(method.toUpperCase()),
+      )
+    ) {
       return "Matcher contains an unsupported HTTP method";
     }
-    if (rule.matcher.resourceTypes?.some((type) => !VALID_RESOURCE_TYPES.has(type))) {
+    if (
+      rule.matcher.resourceTypes?.some(
+        (type) => !VALID_RESOURCE_TYPES.has(type),
+      )
+    ) {
       return "Matcher contains an unsupported resource type";
     }
     const probability = rule.action.probability;
     if (!Number.isFinite(probability) || probability < 0 || probability > 1) {
       return "Probability must be between 0 and 1";
     }
-    if (rule.action.type === "error" && !VALID_ERROR_STATUSES.has(rule.action.status)) {
+    if (
+      rule.action.type === "error" &&
+      !VALID_ERROR_STATUSES.has(rule.action.status)
+    ) {
       return "Unsupported HTTP status";
     }
-    if (rule.action.type === "delay" && (!Number.isFinite(rule.action.delayMs) || rule.action.delayMs < 0 || rule.action.delayMs > 60000)) {
+    if (
+      rule.action.type === "delay" &&
+      (!Number.isFinite(rule.action.delayMs) ||
+        rule.action.delayMs < 0 ||
+        rule.action.delayMs > 60000)
+    ) {
       return "Delay must be between 0 and 60000 ms";
     }
-    if (rule.action.type === "throttle" && (!Number.isFinite(rule.action.latencyMs) || rule.action.latencyMs < 0 || rule.action.latencyMs > 10000)) {
+    if (
+      rule.action.type === "throttle" &&
+      (!Number.isFinite(rule.action.latencyMs) ||
+        rule.action.latencyMs < 0 ||
+        rule.action.latencyMs > 10000)
+    ) {
       return "Latency must be between 0 and 10000 ms";
     }
-    if (rule.action.type === "throttle" && (!Number.isFinite(rule.action.downloadKbps) || !Number.isFinite(rule.action.uploadKbps) || rule.action.downloadKbps < 1 || rule.action.uploadKbps < 1 || rule.action.downloadKbps > 50000 || rule.action.uploadKbps > 50000)) {
+    if (
+      rule.action.type === "throttle" &&
+      (!Number.isFinite(rule.action.downloadKbps) ||
+        !Number.isFinite(rule.action.uploadKbps) ||
+        rule.action.downloadKbps < 1 ||
+        rule.action.uploadKbps < 1 ||
+        rule.action.downloadKbps > 50000 ||
+        rule.action.uploadKbps > 50000)
+    ) {
       return "Bandwidth must be between 1 and 50000 KB/s";
     }
     if (rule.action.type === "mutate") {
-      if (rule.action.mutations.length === 0) return "Mutation action needs at least one mutation";
-      if (rule.action.mutations.some((mutation) => mutation.path !== "" && !mutation.path.startsWith("/"))) {
+      if (rule.action.mutations.length === 0)
+        return "Mutation action needs at least one mutation";
+      if (
+        rule.action.mutations.some(
+          (mutation) => mutation.path !== "" && !mutation.path.startsWith("/"),
+        )
+      ) {
         return "Mutation paths must use JSON Pointer syntax";
       }
-      if (rule.action.mutations.some((mutation) => mutation.op === "type_mismatch" && !["string", "number", "boolean", "null"].includes(mutation.targetType))) {
+      if (
+        rule.action.mutations.some(
+          (mutation) =>
+            mutation.op === "type_mismatch" &&
+            !["string", "number", "boolean", "null"].includes(
+              mutation.targetType,
+            ),
+        )
+      ) {
         return "Mutation contains an unsupported target type";
       }
     }
@@ -270,13 +318,14 @@ export interface RequestContext {
   graphqlOperationName?: string;
 }
 
-export function getGraphqlOperationName(
-  postData?: string,
-): string | undefined {
+export function getGraphqlOperationName(postData?: string): string | undefined {
   if (!postData) return undefined;
 
   try {
-    const body = JSON.parse(postData) as { operationName?: unknown; query?: unknown };
+    const body = JSON.parse(postData) as {
+      operationName?: unknown;
+      query?: unknown;
+    };
     if (typeof body.operationName === "string" && body.operationName) {
       return body.operationName;
     }

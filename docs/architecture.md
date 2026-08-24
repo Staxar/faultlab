@@ -8,7 +8,12 @@ class yet.
 ```ts
 class ChromeNetworkAdapter {
   stop(): Promise<void>;
-  applyRules(tabId: number, rules: FaultRule[], recording?: boolean, monitoring?: boolean): Promise<void>;
+  applyRules(
+    tabId: number,
+    rules: FaultRule[],
+    recording?: boolean,
+    monitoring?: boolean,
+  ): Promise<void>;
 }
 ```
 

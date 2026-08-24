@@ -62,7 +62,11 @@ function createAction(type: RuleAction["type"]): RuleAction {
     };
   }
   if (type === "mutate") {
-    return { type, mutations: [{ op: "remove", path: "/field" }], probability: 1 };
+    return {
+      type,
+      mutations: [{ op: "remove", path: "/field" }],
+      probability: 1,
+    };
   }
   return { type, probability: 1 };
 }
@@ -134,7 +138,9 @@ function App() {
   const [selectedRecordings, setSelectedRecordings] = useState<Set<string>>(
     new Set(),
   );
-  const [discoveredData, setDiscoveredData] = useState<RuntimeResponse["discovered"]>({
+  const [discoveredData, setDiscoveredData] = useState<
+    RuntimeResponse["discovered"]
+  >({
     urls: [],
     graphqlOperations: [],
     jsonPaths: [],
@@ -170,10 +176,15 @@ function App() {
       void send({ type: "GET_STATE" })
         .then((response) => {
           if (response.state) setState(response.state);
-          if (!response.ok) setError(response.error ?? "Could not refresh recorder state");
+          if (!response.ok)
+            setError(response.error ?? "Could not refresh recorder state");
         })
         .catch((reason: unknown) => {
-          setError(reason instanceof Error ? reason.message : "Could not refresh recorder state");
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not refresh recorder state",
+          );
         });
     }, 1000);
     return () => window.clearInterval(interval);
@@ -184,10 +195,15 @@ function App() {
       void send({ type: "GET_STATE" })
         .then((response) => {
           if (response.state) setState(response.state);
-          if (!response.ok) setError(response.error ?? "Could not refresh error state");
+          if (!response.ok)
+            setError(response.error ?? "Could not refresh error state");
         })
         .catch((reason: unknown) => {
-          setError(reason instanceof Error ? reason.message : "Could not refresh error state");
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not refresh error state",
+          );
         });
     }, 1000);
     return () => window.clearInterval(interval);
@@ -349,22 +365,31 @@ function App() {
     }
     void refresh({ type: "ACTIVATE_SCENARIO", scenarioId: s.id });
   };
-    const deleteScenario = async (scenario: Scenario) => {
-      if (!window.confirm(`Delete ${scenario.name}?`)) return;
-      await refresh({ type: "DELETE_SCENARIO", scenarioId: scenario.id });
-    };
-    const addRule = () =>
-      updateDraft((scenario) =>
-        scenario.builtIn
-          ? scenario
-          : { ...scenario, rules: [...scenario.rules, createCustomRule(scenario.rules.length + 1)] },
-      );
-    const removeRule = (ruleIndex: number) =>
-      updateDraft((scenario) =>
-        scenario.builtIn || scenario.rules.length === 1
-          ? scenario
-          : { ...scenario, rules: scenario.rules.filter((_, index) => index !== ruleIndex) },
-      );
+  const deleteScenario = async (scenario: Scenario) => {
+    if (!window.confirm(`Delete ${scenario.name}?`)) return;
+    await refresh({ type: "DELETE_SCENARIO", scenarioId: scenario.id });
+  };
+  const addRule = () =>
+    updateDraft((scenario) =>
+      scenario.builtIn
+        ? scenario
+        : {
+            ...scenario,
+            rules: [
+              ...scenario.rules,
+              createCustomRule(scenario.rules.length + 1),
+            ],
+          },
+    );
+  const removeRule = (ruleIndex: number) =>
+    updateDraft((scenario) =>
+      scenario.builtIn || scenario.rules.length === 1
+        ? scenario
+        : {
+            ...scenario,
+            rules: scenario.rules.filter((_, index) => index !== ruleIndex),
+          },
+    );
   const operationOptions = draft
     ? [
         ...new Set([
@@ -428,42 +453,73 @@ function App() {
       <section className="recorder-panel">
         <div className="section-heading">
           <small>RECORDER</small>
-          <span className={state.recorder.active ? "recording-dot" : "field-hint"}>
-            {state.recorder.active ? "Recording" : `${state.recorder.requests.length} observed`}
+          <span
+            className={state.recorder.active ? "recording-dot" : "field-hint"}
+          >
+            {state.recorder.active
+              ? "Recording"
+              : `${state.recorder.requests.length} observed`}
           </span>
         </div>
         <div className="recorder-actions">
           {state.recorder.active ? (
-            <button className="primary" type="button" onClick={() => void stopRecording()}>
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void stopRecording()}
+            >
               Stop recording
             </button>
           ) : (
-            <button className="secondary" disabled={loading} type="button" onClick={() => void startRecording()}>
+            <button
+              className="secondary"
+              disabled={loading}
+              type="button"
+              onClick={() => void startRecording()}
+            >
               Start recording
             </button>
           )}
-          <button className="secondary" disabled={loading || state.recorder.requests.length === 0} type="button" onClick={() => void clearRecording()}>
+          <button
+            className="secondary"
+            disabled={loading || state.recorder.requests.length === 0}
+            type="button"
+            onClick={() => void clearRecording()}
+          >
             Clear
           </button>
         </div>
         {state.recorder.requests.length > 0 && (
           <>
             <div className="recorded-list">
-              {state.recorder.requests.slice(-25).map((request: RecordedRequest) => (
-                <label className="recorded-request" key={request.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedRecordings.has(request.id)}
-                    onChange={() => toggleRecordingSelection(request.id)}
-                  />
-                  <span>
-                    <b>{request.method} {request.url}</b>
-                    <em>{[request.resourceType, request.graphqlOperationName].filter(Boolean).join(" · ") || "request"}</em>
-                  </span>
-                </label>
-              ))}
+              {state.recorder.requests
+                .slice(-25)
+                .map((request: RecordedRequest) => (
+                  <label className="recorded-request" key={request.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedRecordings.has(request.id)}
+                      onChange={() => toggleRecordingSelection(request.id)}
+                    />
+                    <span>
+                      <b>
+                        {request.method} {request.url}
+                      </b>
+                      <em>
+                        {[request.resourceType, request.graphqlOperationName]
+                          .filter(Boolean)
+                          .join(" · ") || "request"}
+                      </em>
+                    </span>
+                  </label>
+                ))}
             </div>
-            <button className="secondary create-recorded" disabled={loading || selectedRecordings.size === 0} type="button" onClick={() => void createFromRecording()}>
+            <button
+              className="secondary create-recorded"
+              disabled={loading || selectedRecordings.size === 0}
+              type="button"
+              onClick={() => void createFromRecording()}
+            >
               Create scenario from selected
             </button>
           </>
@@ -483,7 +539,11 @@ function App() {
       <section className="issues-panel">
         <div className="section-heading">
           <small>ERROR DETECTION</small>
-          <span className={state.errorMonitor.active ? "recording-dot" : "field-hint"}>
+          <span
+            className={
+              state.errorMonitor.active ? "recording-dot" : "field-hint"
+            }
+          >
             {state.errorMonitor.active
               ? "Monitoring"
               : `${findings.length} findings`}
@@ -491,20 +551,35 @@ function App() {
         </div>
         <div className="recorder-actions">
           {state.errorMonitor.active ? (
-            <button className="primary" type="button" onClick={() => void stopErrorMonitoring()}>
+            <button
+              className="primary"
+              type="button"
+              onClick={() => void stopErrorMonitoring()}
+            >
               Stop monitoring
             </button>
           ) : (
-            <button className="secondary" disabled={loading} type="button" onClick={() => void startErrorMonitoring()}>
+            <button
+              className="secondary"
+              disabled={loading}
+              type="button"
+              onClick={() => void startErrorMonitoring()}
+            >
               Start monitoring
             </button>
           )}
-          <button className="secondary" disabled={loading || state.errorMonitor.issues.length === 0} type="button" onClick={() => void clearDetectedIssues()}>
+          <button
+            className="secondary"
+            disabled={loading || state.errorMonitor.issues.length === 0}
+            type="button"
+            onClick={() => void clearDetectedIssues()}
+          >
             Clear
           </button>
         </div>
         <span className="field-hint issue-hint">
-          Console, runtime, Promise, and network failures stay local to this browser.
+          Console, runtime, Promise, and network failures stay local to this
+          browser.
         </span>
         {findings.length > 0 && (
           <div className="issues-list">
@@ -518,21 +593,27 @@ function App() {
                 ? state.scenarios.find((item) => item.id === finding.scenarioId)
                 : undefined;
               return (
-              <div className="issue-row" key={finding.id}>
-                <div className="issue-meta">
-                  <b>{issueTypeLabel(finding.type)}</b>
-                  <strong>{finding.count}x</strong>
-                  <time>{new Date(finding.lastSeen).toLocaleTimeString()}</time>
+                <div className="issue-row" key={finding.id}>
+                  <div className="issue-meta">
+                    <b>{issueTypeLabel(finding.type)}</b>
+                    <strong>{finding.count}x</strong>
+                    <time>
+                      {new Date(finding.lastSeen).toLocaleTimeString()}
+                    </time>
+                  </div>
+                  <span>{finding.message}</span>
+                  {(scenario || injection || finding.source) && (
+                    <em>
+                      {[
+                        scenario?.name,
+                        injection && `${injection.method} ${injection.url}`,
+                        finding.source,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </em>
+                  )}
                 </div>
-                <span>{finding.message}</span>
-                {(scenario || injection || finding.source) && (
-                  <em>
-                    {[scenario?.name, injection && `${injection.method} ${injection.url}`, finding.source]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </em>
-                )}
-              </div>
               );
             })}
           </div>
@@ -540,13 +621,20 @@ function App() {
       </section>
       <div className="section-heading">
         <small>QUICK CHAOS</small>
-        <button className="secondary add-scenario" disabled={loading} onClick={openNewEditor}>
+        <button
+          className="secondary add-scenario"
+          disabled={loading}
+          onClick={openNewEditor}
+        >
           + New scenario
         </button>
       </div>
       <section>
         {state.scenarios.map((s) => (
-          <article className={s.builtIn ? "scenario-row" : "scenario-row custom-row"} key={s.id}>
+          <article
+            className={s.builtIn ? "scenario-row" : "scenario-row custom-row"}
+            key={s.id}
+          >
             <button
               className={
                 state.activeScenarioId === s.id ? "scenario active" : "scenario"
@@ -619,9 +707,12 @@ function App() {
                 ×
               </button>
             </header>
-            {!draft.builtIn && !state.scenarios.some((scenario) => scenario.id === draft.id) && (
-              <div className="field-hint">Custom scenarios are stored only in this browser.</div>
-            )}
+            {!draft.builtIn &&
+              !state.scenarios.some((scenario) => scenario.id === draft.id) && (
+                <div className="field-hint">
+                  Custom scenarios are stored only in this browser.
+                </div>
+              )}
             <label>
               Scenario name
               <input
@@ -675,7 +766,9 @@ function App() {
                       updateDraft((scenario) => ({
                         ...scenario,
                         rules: scenario.rules.map((item, index) =>
-                          index === ruleIndex ? { ...item, name: event.target.value } : item,
+                          index === ruleIndex
+                            ? { ...item, name: event.target.value }
+                            : item,
                         ),
                       }))
                     }
@@ -707,7 +800,12 @@ function App() {
                         ...scenario,
                         rules: scenario.rules.map((item, index) =>
                           index === ruleIndex
-                            ? { ...item, action: createAction(event.target.value as RuleAction["type"]) }
+                            ? {
+                                ...item,
+                                action: createAction(
+                                  event.target.value as RuleAction["type"],
+                                ),
+                              }
                             : item,
                         ),
                       }))
@@ -739,7 +837,8 @@ function App() {
                     ))}
                   </select>
                   <span className="field-hint">
-                    Endpoints are discovered from requests after the page is refreshed.
+                    Endpoints are discovered from requests after the page is
+                    refreshed.
                   </span>
                 </label>
                 <label>
@@ -761,7 +860,8 @@ function App() {
                     ))}
                   </select>
                   <span className="field-hint">
-                    Refresh the page after activating the scenario to discover operations and JSON fields.
+                    Refresh the page after activating the scenario to discover
+                    operations and JSON fields.
                   </span>
                 </label>
                 <div className="choice-group">
@@ -771,7 +871,9 @@ function App() {
                       <label className="choice" key={method}>
                         <input
                           type="checkbox"
-                          checked={rule.matcher.methods?.includes(method) ?? false}
+                          checked={
+                            rule.matcher.methods?.includes(method) ?? false
+                          }
                           onChange={() =>
                             toggleMatcherValue(ruleIndex, "methods", method)
                           }
@@ -789,8 +891,9 @@ function App() {
                         <input
                           type="checkbox"
                           checked={
-                            rule.matcher.resourceTypes?.includes(resourceType) ??
-                            false
+                            rule.matcher.resourceTypes?.includes(
+                              resourceType,
+                            ) ?? false
                           }
                           onChange={() =>
                             toggleMatcherValue(
@@ -835,7 +938,7 @@ function App() {
                                 ? {
                                     ...item,
                                     maxApplications: event.target.checked
-                                      ? item.maxApplications ?? 1
+                                      ? (item.maxApplications ?? 1)
                                       : undefined,
                                   }
                                 : item,
@@ -861,7 +964,9 @@ function App() {
                                 index === ruleIndex
                                   ? {
                                       ...item,
-                                      maxApplications: Number(event.target.value),
+                                      maxApplications: Number(
+                                        event.target.value,
+                                      ),
                                     }
                                   : item,
                               ),
@@ -877,7 +982,8 @@ function App() {
                 )}
                 {rule.action.type === "throttle" && (
                   <span className="field-hint">
-                    Throttle is a tab-level setting and has no per-request application limit.
+                    Throttle is a tab-level setting and has no per-request
+                    application limit.
                   </span>
                 )}
                 {rule.action.type === "error" && (
@@ -890,7 +996,9 @@ function App() {
                           action.type === "error"
                             ? {
                                 ...action,
-                                status: Number(event.target.value) as (typeof STATUS_CODES)[number],
+                                status: Number(
+                                  event.target.value,
+                                ) as (typeof STATUS_CODES)[number],
                               }
                             : action,
                         )
@@ -934,7 +1042,10 @@ function App() {
                         onChange={(event) =>
                           updateAction(ruleIndex, (action) =>
                             action.type === "throttle"
-                              ? { ...action, latencyMs: Number(event.target.value) }
+                              ? {
+                                  ...action,
+                                  latencyMs: Number(event.target.value),
+                                }
                               : action,
                           )
                         }
@@ -969,7 +1080,10 @@ function App() {
                         onChange={(event) =>
                           updateAction(ruleIndex, (action) =>
                             action.type === "throttle"
-                              ? { ...action, uploadKbps: Number(event.target.value) }
+                              ? {
+                                  ...action,
+                                  uploadKbps: Number(event.target.value),
+                                }
                               : action,
                           )
                         }
@@ -981,21 +1095,29 @@ function App() {
                   <div className="mutation-list">
                     <span>JSON mutations</span>
                     {rule.action.mutations.map((mutation, mutationIndex) => (
-                      <div className="mutation-row" key={`${rule.id}-${mutationIndex}`}>
+                      <div
+                        className="mutation-row"
+                        key={`${rule.id}-${mutationIndex}`}
+                      >
                         <select
                           value={mutation.op}
                           onChange={(event) => {
                             const op = event.target.value as JsonMutation["op"];
                             const next: JsonMutation =
                               op === "type_mismatch"
-                                ? { op, path: mutation.path, targetType: "string" }
+                                ? {
+                                    op,
+                                    path: mutation.path,
+                                    targetType: "string",
+                                  }
                                 : { op, path: mutation.path };
                             updateAction(ruleIndex, (action) =>
                               action.type === "mutate"
                                 ? {
                                     ...action,
-                                    mutations: action.mutations.map((item, index) =>
-                                      index === mutationIndex ? next : item,
+                                    mutations: action.mutations.map(
+                                      (item, index) =>
+                                        index === mutationIndex ? next : item,
                                     ),
                                   }
                                 : action,
@@ -1015,10 +1137,14 @@ function App() {
                               action.type === "mutate"
                                 ? {
                                     ...action,
-                                    mutations: action.mutations.map((item, index) =>
-                                      index === mutationIndex
-                                        ? { ...item, path: event.target.value }
-                                        : item,
+                                    mutations: action.mutations.map(
+                                      (item, index) =>
+                                        index === mutationIndex
+                                          ? {
+                                              ...item,
+                                              path: event.target.value,
+                                            }
+                                          : item,
                                     ),
                                   }
                                 : action,
@@ -1040,13 +1166,16 @@ function App() {
                                 action.type === "mutate"
                                   ? {
                                       ...action,
-                                      mutations: action.mutations.map((item, index) =>
-                                        index === mutationIndex && item.op === "type_mismatch"
-                                          ? {
-                                              ...item,
-                                              targetType: event.target.value as (typeof TARGET_TYPES)[number],
-                                            }
-                                          : item,
+                                      mutations: action.mutations.map(
+                                        (item, index) =>
+                                          index === mutationIndex &&
+                                          item.op === "type_mismatch"
+                                            ? {
+                                                ...item,
+                                                targetType: event.target
+                                                  .value as (typeof TARGET_TYPES)[number],
+                                              }
+                                            : item,
                                       ),
                                     }
                                   : action,
@@ -1108,20 +1237,32 @@ function App() {
               </fieldset>
             ))}
             {!draft.builtIn && (
-              <button className="secondary add-rule" type="button" onClick={addRule}>
+              <button
+                className="secondary add-rule"
+                type="button"
+                onClick={addRule}
+              >
                 + Add rule
               </button>
             )}
             <div className="editor-actions">
               {draft.builtIn ? (
-                <button className="secondary" type="button" onClick={() => void resetDraft()}>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => void resetDraft()}
+                >
                   Reset defaults
                 </button>
               ) : (
                 <span />
               )}
               <span />
-              <button className="secondary" type="button" onClick={() => setDraft(null)}>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => setDraft(null)}
+              >
                 Cancel
               </button>
               <button className="primary" type="submit">

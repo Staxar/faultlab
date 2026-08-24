@@ -154,7 +154,9 @@ function parseArrayIndex(key: string): number | null {
   return Number.isSafeInteger(index) ? index : null;
 }
 
-function replacementValue(mutation: Exclude<JsonMutation, { op: "remove" }>): unknown {
+function replacementValue(
+  mutation: Exclude<JsonMutation, { op: "remove" }>,
+): unknown {
   if (mutation.op === "nullify") return null;
   if (mutation.op === "empty_array") return [];
   return valueForType(mutation.targetType);
@@ -179,7 +181,8 @@ function collectPaths(
   paths: Set<string>,
   maxPaths: number,
 ): void {
-  if (paths.size >= maxPaths || value == null || typeof value !== "object") return;
+  if (paths.size >= maxPaths || value == null || typeof value !== "object")
+    return;
   if (Array.isArray(value)) {
     if (value.length === 0) return;
     const wildcardPath = `${path}/*`;
