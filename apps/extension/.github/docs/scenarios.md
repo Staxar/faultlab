@@ -76,6 +76,10 @@ After activating the scenario, refresh the target page. The adapter reads names 
 
 Custom scenarios can be created from the Side Panel with one or more rules. Each custom scenario supports the same matcher and action controls as the built-in presets, is stored under `faultlab.runtime`, and can be edited or deleted. Built-in scenarios cannot be deleted or converted into custom scenarios. Deleting the active custom scenario deactivates network interception first.
 
+## Recorded Scenarios
+
+The recorder stores up to 500 unique network observations for the selected tab. A user can select observed requests and create a custom scenario. Each unique endpoint, method, resource type, and GraphQL operation becomes a delay rule with an 800 ms default delay. The generated scenario is local and editable; recording does not capture request bodies or send observations to a server.
+
 ## Future Examples
 
 These examples are useful acceptance scenarios for the builder, but are not built-in presets in the current MVP:

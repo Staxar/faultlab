@@ -63,4 +63,4 @@ Current slice:
 
 Current development slice:
 
-MVP 0.3 makes presets configurable and supports local custom scenarios with multiple rules, bounded per-request application limits, and broad-matcher confirmation. Error detection belongs to MVP 0.5.
+MVP 0.3 makes presets configurable and supports local custom scenarios with multiple rules, bounded per-request application limits, and broad-matcher confirmation. The first MVP 0.4 recorder slice observes up to 500 network requests locally and turns selected observations into editable delay scenarios. Error detection belongs to MVP 0.5.

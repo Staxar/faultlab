@@ -39,6 +39,19 @@ The list should distinguish built-in presets from custom scenarios. Built-ins sh
 
 Choose scenario -> review scope -> activate -> observe failures.
 
+## Recorder Flow
+
+The recorder is a compact workflow in the Side Panel:
+
+1. start recording on the selected tab;
+2. browse the application normally;
+3. stop recording and review observed requests;
+4. select one or more requests;
+5. create a custom scenario from the selection;
+6. configure or activate the generated scenario.
+
+Recording must be visibly active, keep request URLs truncated in the list, and make the local-only behavior clear. Starting a recording disables an active chaos scenario so the observations represent normal application traffic. The initial generated action is an 800 ms request delay and remains editable.
+
 ## Local-First Behavior
 
 Draft and saved configuration stays in Chrome local storage. The UI should never imply that scenarios are shared, synchronized, or active in every tab when the adapter only controls the selected tab.

@@ -67,9 +67,14 @@ Not part of 0.3: regex or wildcard matchers, headers/body matching, response mut
 
 ## MVP 0.4 - Recorder
 
-- record a user journey;
-- turn selected observations into a repeatable scenario;
-- keep recorded data local by default.
+Status: first network-recording slice implemented in the `feature/recorder` branch.
+
+- record up to 500 unique network requests locally;
+- select observed requests in the Side Panel;
+- turn selected observations into a custom scenario with one delay rule per unique request;
+- keep recorded data in `faultlab.runtime` and discard it only when the user clears it.
+
+Remaining recorder work: capture user interactions and navigation milestones, support richer generated actions, and add an explicit recording session timeline.
 
 ## MVP 0.5 - Error Detection
 
