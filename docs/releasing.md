@@ -1,10 +1,12 @@
 # Releasing FaultLab
 
-This document describes the first `0.1.0` release and the process for future updates. The current unreleased development version is `0.2.0`.
+This document describes the first `0.1.0` release and the process for future updates. The current
+development version is `0.2.0`.
 
 ## Release policy
 
-`0.1.0` is the first public snapshot of the current MVP. It includes:
+`0.1.0` is the first public snapshot of the MVP. The current `0.2.0` development line additionally
+contains builder, recorder, and error-monitoring work. The `0.1.0` snapshot includes:
 
 - network latency, bandwidth throttling, offline failures, delays, and HTTP failures;
 - JSON response mutation for Fetch/XHR responses;
@@ -12,7 +14,9 @@ This document describes the first `0.1.0` release and the process for future upd
 - discovery of observed endpoints, GraphQL operations, and JSON fields;
 - local runtime state for the selected tab.
 
-Custom scenario CRUD, application limits, request-body mutation, and multi-tab orchestration are not part of this release.
+Custom scenario CRUD, application limits, recorder timeline, error monitoring, request-body mutation, and
+multi-tab orchestration were not part of the original `0.1.0` snapshot. They must be described as
+development features until a new version is released.
 
 Use semantic versioning for later releases:
 
@@ -26,7 +30,7 @@ Requirements:
 
 - Node.js 20 or newer;
 - pnpm 10 or newer;
-- Chrome or Chromium;
+- Chrome or Chromium 116 or newer;
 - a Git remote, if the source release will be hosted on GitHub.
 
 From the repository root:
@@ -38,7 +42,7 @@ pnpm build
 git diff --check
 ```
 
-Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `sidepanel.html`, the generated assets, and `icons/icon-16.png`, `icons/icon-32.png`, `icons/icon-48.png`, and `icons/icon-128.png`. Load `apps/extension/dist` as an unpacked extension from `chrome://extensions` and manually verify:
+Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `content.js`, `sidepanel.html`, the generated assets, and the four icon sizes. Load `apps/extension/dist` as an unpacked extension from `chrome://extensions` and manually verify:
 
 - the Side Panel opens;
 - Backend Down, Slow Network, Offline, and Bad Data can be activated;
@@ -46,6 +50,8 @@ Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `s
 - stopping a scenario restores normal requests;
 - invalid, non-JSON, and unreadable response bodies pass through unchanged;
 - endpoint, GraphQL operation, and JSON field discovery works after browsing a test page.
+- scenario activation and deactivation update the selected tab;
+- error monitoring and recorder sessions stay on one selected tab.
 
 ## Prepare the source release
 

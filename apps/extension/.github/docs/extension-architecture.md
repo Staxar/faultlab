@@ -2,13 +2,8 @@
 
 ## Structure
 
-extension/
-
-background/
-content/
-devtools/
-popup/
-sidepanel/
+The current extension contains `background`, `content`, and `sidepanel` entry points. `devtools` is a
+placeholder for future work; popup and options surfaces are not implemented.
 
 ## Components
 
@@ -29,14 +24,19 @@ Responsibilities:
 
 ### DevTools Panel
 
-Responsibilities:
-
-- diagnostics
-- request inspection
+Status: planned. Do not describe a DevTools panel or add its permissions without a separate feature.
 
 ### Content Script
 
 Responsibilities:
 
-- page instrumentation
-- UI mutations
+- recorder navigation, click, and form-change events;
+- runtime error and unhandled Promise rejection reports.
+
+UI mutation and content stress features are not implemented.
+
+### Selected-tab sessions
+
+The background owns the active debugger attachment. Recording and error monitoring are local, bounded
+sessions tied to one selected tab. The Side Panel communicates through runtime messages; it does not use
+Chrome debugger or storage APIs directly.

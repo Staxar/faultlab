@@ -26,8 +26,9 @@ Architecture principles:
 - UI belongs in apps/extension
 - Shared contracts belong in shared/
 
-Never couple UI with Chrome APIs directly.
-Use adapters.
+Keep Chrome-specific behavior behind the background service worker and the runtime-message boundary. The
+Side Panel may call the small `send()` runtime messaging helper, but must not use `chrome.debugger`,
+`chrome.storage`, or `chrome.tabs` directly.
 
 Prefer extensible architecture over shortcuts.
 
@@ -37,3 +38,10 @@ Implementation details:
 - Keep core exports browser-neutral; put Chrome debugger and storage integration under `apps/extension/src`.
 - The background service worker is emitted as `background.js`; update `manifest.json` when permissions or entry points change.
 - Use `pnpm typecheck` for workspace checks and `pnpm build` to produce `dist/` for loading as an unpacked extension.
+- `content/main.ts` is active for recorder navigation/click/change events and runtime/unhandled rejection
+	reports. Do not add UI mutation behavior there without an explicit design and permission review.
+- Recorder and error monitoring are local, bounded, selected-tab sessions. Persist only metadata needed by
+	the UI; do not persist request bodies, form values, or matched response bodies.
+- Handle `ACTIVATE_SCENARIO` and `DEACTIVATE_SCENARIO` failures visibly. Every paused Fetch request or
+	response must have a best-effort continuation path when injection cannot be applied.
+- `devtools/main.ts` is deferred; do not add DevTools permissions or entry points implicitly.

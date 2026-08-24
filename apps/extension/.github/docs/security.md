@@ -17,6 +17,17 @@ Never store:
 
 Without explicit permission.
 
+## Current Local Data Surface
+
+The recorder persists raw request and navigation URLs, and the error monitor persists issue messages,
+source URLs, and timestamps under `faultlab.runtime`. These values can contain sensitive query strings or
+application data. The recorder does not persist request bodies or form values. GraphQL request data and
+matched JSON response bodies may be read transiently in memory when discovery or mutation is active.
+
+Authorization, Cookie, email, and token redaction is not currently implemented. Do not add export, AI, or
+server integrations until URL/query redaction, explicit retention controls, and response-body handling are
+designed and tested.
+
 ## Error Monitoring
 
 When monitoring is active, FaultLab reads console and debugger error metadata for the selected tab and

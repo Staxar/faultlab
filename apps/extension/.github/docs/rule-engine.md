@@ -6,17 +6,10 @@ The rule engine is browser-independent. A rule answers:
 2. should the action be applied for this probability?
 3. what controlled failure should be returned?
 
-## Current Rule Shape
-
-`FaultRule` contains:
+- optional `maxApplications` from 1 to 1000, reset when the scenario is applied;
 
 - `id`;
 - `name`;
-- `enabled`;
-- `matcher`;
-- `action`.
-
-The current matcher supports a literal `urlIncludes` substring, HTTP `methods`, Chrome `resourceTypes`, and an optional `graphqlOperationName`. The operation name is extracted from the GraphQL request body. It does not inspect headers, request bodies as arbitrary match data, response statuses, or regular expressions.
 
 ## Current Actions
 
@@ -51,12 +44,6 @@ Example:
   ]
 }
 ```
-
-Mutations run in array order. A missing path leaves the document unchanged for that operation. JSON Pointer escaping uses `~1` for `/` and `~0` for `~`. FaultLab additionally supports `*` as a wildcard token for all children of an object or array, which lets one rule mutate every item in a response collection. Invalid JSON, unreadable bodies, binary/non-JSON bodies, and bodies above the adapter limit pass through unchanged.
-
-## Probability and Validation
-
-Per-request probability is represented as a number from 0 to 1 in core and displayed as 0% to 100% in the UI. Values are clamped by the existing probability helper; builder input should reject out-of-range values before saving.
 
 The builder should validate:
 

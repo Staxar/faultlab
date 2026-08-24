@@ -17,17 +17,18 @@ The first builder slice is a compact preset detail view inside the Side Panel:
 
 Implemented controls include scenario name and description, literal URL substring, HTTP methods, resource types, probability, HTTP status, delay, tab-level bandwidth, and JSON mutation operations.
 
-The initial configuration view should cover probability, URL substring, HTTP methods, resource types, status code, delay, latency, bandwidth, and the relevant JSON mutation fields. Keep advanced controls hidden until their action type is selected.
+The current configuration view covers probability, URL substring, HTTP methods, resource types, status code, delay, latency, bandwidth, application limits, and the relevant JSON mutation fields. Keep advanced controls hidden until their action type is selected. Validation is currently returned as a global error message rather than field-level feedback.
 
 ## Safety States
 
 - disable Save when a required value is invalid;
-- show the effective matcher in the form, for example `POST requests containing /api/payment`;
+- effective matcher summaries and field-level validation remain planned;
 - warn before activating an empty matcher that affects every supported request;
 - show whether a setting applies per request or to the whole selected tab;
 - show an adapter error when the selected page cannot be attached to Chrome Debugger;
 - make `Reset defaults` available for built-in presets;
-- require confirmation before deleting a custom scenario.
+- require confirmation before deleting a custom scenario;
+- surface activation and deactivation failures from the background.
 
 ## Simple Controls
 

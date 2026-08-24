@@ -1,0 +1,986 @@
+> **Aspiracyjny product brief.** Ten dokument opisuje docelową wizję FaultLab, a nie aktualny kontrakt
+> implementacyjny. Funkcje oznaczone poniżej jako przyszłe nie są obecnie dostępne. Aktualny stan należy
+> sprawdzać w `README.md`, `apps/extension/.github/docs/roadmap.md` i kodzie źródłowym.
+>
+> Zrealizowane obecnie: network/API chaos, JSON response mutation, configurable/custom scenarios,
+> per-request limits, local recorder with a journey timeline, and local error collection. Nadal brakuje
+> Browser Chaos, UI Chaos, data stress generators, Auto Chaos, correlation/reports, DevTools, CLI,
+> Playwright, integrations, and team features.
+>
+> Manifest, architecture, stack, and permission snippets below are illustrative product ideas. They are
+> not a description of the current files or dependencies; do not add permissions or libraries from this
+> document without a separate implementation and security decision.
+
+1. Główna idea
+Użytkownik wchodzi na dowolną stronę:
+https://my-app.com/checkout
+otwiera rozszerzenie i wybiera:
+🧪 Break this page
+Dostaje:
+NETWORK
+────────────────────
+☐ Offline
+☐ Slow 3G
+☐ Slow 4G
+☐ High latency
+☐ Random latency
+☐ Packet loss
+
+API
+────────────────────
+☐ Random 500
+☐ Random 404
+☐ Random 401
+☐ Empty response
+☐ Corrupt JSON
+☐ Delayed response
+☐ Timeout
+
+CONTENT
+────────────────────
+☐ Remove images
+☐ Break images
+☐ Empty lists
+☐ Missing fields
+☐ Huge text
+☐ Long names
+
+BROWSER
+────────────────────
+☐ Local storage unavailable
+☐ Cookies unavailable
+☐ Geolocation denied
+☐ Reduced CPU
+☐ Mobile device
+☐ Offline
+
+UI
+────────────────────
+☐ Hide random elements
+☐ Resize viewport
+☐ Slow rendering
+Klikasz:
+🔥 BREAK IT
+i aplikacja zaczyna działać w warunkach awaryjnych.
+2. Najważniejsza rzecz — nie robimy „mockowania API” jako jedynej funkcji
+To byłoby za mało.
+Chcemy stworzyć:
+
+Failure Injection Platform for Web Apps
+Czyli:
+„Co się stanie z aplikacją, kiedy świat przestanie działać idealnie?”
+To jest fundamentalna różnica.
+3. Główne moduły
+Podzieliłbym produkt na 7 modułów.
+BreakPoint
+│
+├── Network Chaos
+├── API Chaos
+├── Browser Chaos
+├── Data Chaos
+├── UI Chaos
+├── Scenario Engine
+└── Test Recorder
+4. NETWORK CHAOS
+Najprostszy moduł do zrobienia i świetny do MVP.
+Presety
+🟢 Normal
+
+📶 Fast 4G
+
+📱 Slow 4G
+
+🐌 Slow 3G
+
+🐢 Very Slow
+
+📴 Offline
+Ale również ręcznie:
+Latency:       1500 ms
+Download:      500 KB/s
+Upload:        50 KB/s
+Packet loss:   20%
+Chrome DevTools Protocol pozwala emulować m.in. offline, opóźnienie, przepustowość i stan sieci; nowsze mechanizmy pozwalają też stosować warunki do konkretnych requestów.
+To oznacza, że możemy zrobić coś znacznie ciekawszego niż zwykłe:
+
+„Slow 3G”.
+5. API CHAOS
+Tutaj zaczyna się prawdziwa zabawa.
+Rozszerzenie obserwuje requesty:
+
+GET /api/products
+GET /api/cart
+GET /api/user
+POST /api/checkout
+I użytkownik może kliknąć:
+/api/products
+Rules
+Response:
+
+☐ 500
+☐ 404
+☐ 401
+☐ 403
+☐ 429
+☐ 503
+
+Delay:
+[ 2000 ms ]
+
+Probability:
+[ 30% ]
+
+Response:
+☐ Empty
+☐ Corrupted
+☐ Missing fields
+☐ Custom JSON
+Przykład:
+POST /api/payment
+
+30% → 500
+20% → timeout
+10% → 429
+40% → normal
+I nagle możemy testować:
+Czy checkout przeżyje prawdziwy świat?
+6. Random Failure
+To jest funkcja, którą szczególnie warto zrobić.
+Zamiast:
+
+/api/products → 500
+możemy powiedzieć:
+Randomly break API
+500       10%
+404        5%
+401        5%
+timeout   10%
+slow      20%
+empty      5%
+normal    45%
+I zostawiasz aplikację w takim trybie.
+To pozwala znaleźć problemy, których ręcznie nigdy byś nie przetestował.
+
+7. „Break only this request”
+Bardzo ważne UX.
+Na stronie:
+
+GET /api/products
+klikamy:
+💥 Break this request
+i od razu:
+500 Internal Server Error
+Bez konfigurowania niczego.
+8. DATA CHAOS
+To może być killer feature.
+Załóżmy:
+
+{
+  "name": "Marcin",
+  "email": "test@test.com"
+}
+Możemy automatycznie zrobić:
+Missing field
+{
+  "name": "Marcin"
+}
+Null
+{
+  "name": null,
+  "email": null
+}
+Wrong type
+{
+  "name": 123,
+  "email": true
+}
+Huge data
+{
+  "name": "AAAAAAA.... [50 000 znaków]"
+}
+Empty
+{}
+Array explosion
+{
+  "items": [50000 items]
+}
+9. Inteligentne psucie JSON
+Możemy zrobić generator:
+🔥 Corrupt response
+
+☑ Remove random fields
+☑ Null random fields
+☑ Change types
+☑ Empty arrays
+☑ Duplicate items
+☑ Add unknown fields
+☑ Increase payload
+☑ Randomize values
+I suwaki:
+Failure intensity
+
+○────────────●────
+             75%
+10. BROWSER CHAOS
+Tu możemy wykorzystać Chrome DevTools Protocol.
+Możemy emulować m.in.:
+
+CPU throttling
+viewport
+geolocation
+timezone
+user agent
+media features
+offline state.
+Czyli:
+Device
+☐ iPhone
+☐ Android
+☐ Tablet
+☐ Small laptop
+☐ 4K
+Environment
+☐ Slow CPU
+☐ Offline
+☐ GPS denied
+☐ Dark mode
+☐ Reduced motion
+☐ Different timezone
+11. UI CHAOS
+Tutaj można zrobić coś bardzo fajnego.
+Randomly break UI
+☑ Hide images
+☑ Hide icons
+☑ Remove buttons
+☑ Long text
+☑ Huge text
+☑ Empty states
+☑ Missing avatar
+☑ Broken image
+Np.:
+John Smith
+zamienia się na:
+Alexander Maximilian von Schwarzenberg
+i sprawdzamy:
+czy layout się nie rozpierdzieli? 😄
+12. Content Stress
+Generator danych:
+Name
+→ "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+Email
+→ "very-long-email-address-..."
+
+Title
+→ 500 characters
+
+Description
+→ 10,000 characters
+To jest świetne do znajdowania bugów UI.
+13. Scenarios
+To powinien być jeden z głównych elementów produktu.
+Zamiast ustawiać 15 rzeczy ręcznie:
+
+Scenario: Bad Mobile Network
+Network
+Latency: 800ms
+Download: 500KB/s
+
+API
+Timeout: 10%
+
+CPU
+4x slower
+
+Images
+20% fail
+Klik:
+▶ Run scenario
+14. Gotowe scenariusze
+Na start:
+🐌 Bad Network
+800ms latency
+500KB/s
+10% timeout
+📴 Offline User
+offline
+API unavailable
+cache only
+💥 Backend Down
+70% API 500
+20% timeout
+10% normal
+🐌 Slow Backend
+2–5 sec API latency
+📱 Bad Mobile
+small viewport
+slow CPU
+slow network
+👻 Missing Data
+nulls
+empty arrays
+missing fields
+🤡 Worst Possible User
+extremely long names
+empty fields
+wrong input
+rapid clicking
+back/forward
+multiple tabs
+15. Scenario Builder
+Użytkownik może stworzyć:
+Scenario:
+"Checkout from hell"
+
+WHEN:
+URL contains /checkout
+
+DO:
+
+[ API ]
+POST /payment → 500 → 20%
+
+[ API ]
+GET /cart → delay 3000ms
+
+[ NETWORK ]
+latency → 1000ms
+
+[ DATA ]
+cart.items → empty
+
+[ UI ]
+payment button → delay interaction
+I:
+Save scenario
+16. Recorder
+To moim zdaniem będzie bardzo mocne.
+Klikasz:
+
+🔴 Record
+Następnie normalnie używasz aplikacji:
+Open homepage
+↓
+Login
+↓
+Open product
+↓
+Add to cart
+↓
+Checkout
+Rozszerzenie zapisuje:
+Scenario generated
+
+1. Open /
+2. Click "Login"
+3. POST /login
+4. GET /user
+5. GET /products
+6. POST /cart
+7. POST /checkout
+Teraz:
+Break this flow
+i możesz zastosować chaos.
+17. „Find the bug”
+Jeszcze ciekawsze.
+Włączasz:
+
+🧠 Auto Chaos
+Rozszerzenie samo testuje:
+API failures
+network latency
+empty responses
+missing data
+slow CPU
+i obserwuje:
+uncaught errors
+console errors
+failed requests
+unhandled promise rejections
+UI crashes
+blank screens
+Na końcu:
+⚠️ 3 potential problems found
+
+1. Checkout crashes when /cart returns 500
+
+2. UserProfile crashes when avatar = null
+
+3. ProductList has no empty state
+To już zaczyna być produkt klasy QA/developer tool, a nie zabawka.
+18. Error Observatory
+Podczas chaosu zbieramy:
+Console
+Network
+Runtime
+DOM
+Performance
+Przykład:
+Scenario: Backend Down
+
+❌ 4 console errors
+❌ 3 unhandled promises
+❌ 1 blank screen
+⚠️ 2 failed requests not handled
+Klik:
+POST /checkout
+↓
+500
+↓
+Promise rejection
+↓
+Checkout component crashed
+19. Raport
+Po zakończeniu:
+╔══════════════════════════════╗
+║      BREAKPOINT REPORT       ║
+╚══════════════════════════════╝
+
+Scenario:
+Backend Down
+
+Requests tested:        48
+Failed requests:        11
+Unhandled errors:        4
+UI failures:             2
+
+CRITICAL
+───────────────────────────────
+Checkout crashes on HTTP 500
+
+HIGH
+───────────────────────────────
+Cart has no error state
+
+MEDIUM
+───────────────────────────────
+Product list has no empty state
+Można dać:
+Export report
+PDF / JSON / Markdown.
+20. Integracja z Jira/GitHub
+Dopiero później.
+Przy znalezionym problemie:
+
+Create issue
+Automatycznie:
+Title:
+Checkout crashes when payment API returns 500
+
+Environment:
+Chrome 138
+MacOS
+Scenario: Backend Down
+
+Steps:
+1. Open checkout
+2. Enable Backend Down
+3. Submit payment
+
+Expected:
+Error message
+
+Actual:
+Blank page
+
+Console:
+...
+To jest bardzo atrakcyjne dla zespołów.
+21. DevTools integration
+Nie ograniczałbym UI do popupu.
+Chrome ma devtools.network, które pozwala rozszerzeniom korzystać z informacji o requestach widocznych w Network panelu. Ma też devtools.panels do tworzenia własnego panelu w DevTools.
+
+Czyli:
+
+Chrome DevTools
+
+Elements
+Console
+Sources
+Network
+Performance
+Memory
+────────────
+BreakPoint ⭐
+Własny panel:
+┌──────────────────────────────────────────┐
+│ BreakPoint                               │
+├──────────────────────────────────────────┤
+│                                          │
+│ Active scenario: Backend Down            │
+│                                          │
+│ Requests                                 │
+│ ──────────────────────────────────────── │
+│ GET /products              200            │
+│ GET /cart                  500 💥         │
+│ POST /checkout             timeout 💥     │
+│                                          │
+│ Console                                  │
+│ ❌ Unhandled promise rejection            │
+│                                          │
+└──────────────────────────────────────────┘
+22. Architektura
+Ja zrobiłbym to jako:
+breakpoint/
+│
+├── extension/
+│   ├── background/
+│   │   └── service-worker.ts
+│   │
+│   ├── content/
+│   │   └── content-script.ts
+│   │
+│   ├── devtools/
+│   │   ├── devtools.html
+│   │   ├── devtools.ts
+│   │   └── panel/
+│   │
+│   ├── popup/
+│   │
+│   ├── sidepanel/
+│   │
+│   └── options/
+│
+├── core/
+│   ├── scenarios/
+│   ├── rules/
+│   ├── network/
+│   ├── mutations/
+│   ├── detectors/
+│   └── reporting/
+│
+├── shared/
+│   ├── types/
+│   ├── schemas/
+│   └── utils/
+│
+└── packages/
+23. Stack
+Dla Ciebie zrobiłbym:
+Extension
+TypeScript
+UI
+React
+Build
+Vite
+Styling
+Tailwind
+State
+Zustand
+Validation
+Zod
+Storage
+chrome.storage
+Communication
+Chrome Runtime Messaging
+Testing
+Vitest
+Playwright
+Browser
+Na początku:
+Chrome / Chromium
+
+Chrome Extensions mają obecnie API m.in. scripting, storage, sidePanel, devtools, debugger, declarativeNetRequest i webRequest, więc większość potrzebnych fundamentów jest dostępna bez budowania osobnego desktopowego proxy.
+
+24. Bardzo ważna decyzja architektoniczna
+Nie próbowałbym robić wszystkiego przez:
+content-script.js
+Potrzebujemy kilku warstw:
+                 ┌─────────────┐
+                 │     UI      │
+                 │ React       │
+                 └──────┬──────┘
+                        │
+                   messaging
+                        │
+                 ┌──────▼──────┐
+                 │   Engine    │
+                 │             │
+                 │ Rules       │
+                 │ Scenarios   │
+                 │ State       │
+                 └──────┬──────┘
+                        │
+             ┌──────────┼───────────┐
+             ↓          ↓           ↓
+        Content      Debugger    DevTools
+        Script         API         API
+             │          │           │
+             └──────────┼───────────┘
+                        ↓
+                     Browser
+25. Manifest
+Docelowo Manifest V3.
+Minimalnie będziemy potrzebowali zależnie od implementacji:
+
+{
+  "manifest_version": 3,
+  "name": "BreakPoint",
+  "version": "0.1.0",
+
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs",
+    "debugger"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "action": {
+    "default_popup": "popup.html"
+  },
+
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+
+  "devtools_page": "devtools.html"
+}
+Ale nie wrzucałbym wszystkich permissions do pierwszej wersji. Uprawnienia są ogromnym problemem w przypadku rozszerzeń, więc MVP powinno prosić tylko o absolutnie konieczne.
+26. Największy problem techniczny
+Interceptowanie i modyfikowanie requestów.
+To trzeba zaprojektować bardzo ostrożnie.
+Chrome ma webRequest, ale w Manifest V3 istnieją ograniczenia dotyczące blokowania/modyfikowania requestów, dlatego declarativeNetRequest jest preferowanym mechanizmem dla deklaratywnych reguł.
+
+Natomiast dla zaawansowanego debugowania możemy użyć:
+
+chrome.debugger
+        ↓
+Chrome DevTools Protocol
+        ↓
+Network
+chrome.debugger pozwala rozszerzeniu podłączyć się do karty i używać protokołu DevTools do instrumentacji sieci, DOM/CSS i innych elementów strony.
+To daje nam znacznie większe możliwości.
+
+27. Problem bezpieczeństwa
+To będzie najważniejsza rzecz produktu.
+Wtyczka może widzieć:
+
+Authorization
+Cookie
+JWT
+POST body
+Response body
+Dlatego podstawowa zasada:
+Everything local by default.
+MVP:
+Browser
+   ↓
+BreakPoint
+   ↓
+NO SERVER
+Żadnego wysyłania requestów do naszego backendu.
+AI też domyślnie wyłączone.
+
+Jeżeli później dodamy AI:
+
+☑ Allow AI analysis
+
+⚠️ Network data may contain sensitive information.
+I sanitizacja:
+Authorization → [REDACTED]
+Cookie → [REDACTED]
+token → [REDACTED]
+password → [REDACTED]
+email → [REDACTED]
+28. MVP — NIE robimy wszystkiego
+To bardzo ważne.
+Pierwsza wersja powinna robić tylko:
+
+MVP 0.1
+1. Network throttling
+Normal
+Slow 4G
+Slow 3G
+Offline
+Custom
+2. Request failure
+Klikasz request:
+[500]
+[404]
+[401]
+[timeout]
+3. Request delay
+500ms
+1s
+3s
+5s
+4. Random failures
+10%
+25%
+50%
+5. Side panel
+Active rules
+Network
+Requests
+6. Presets
+Slow Network
+Offline
+Backend Down
+I koniec.
+29. MVP 0.2
+Potem:
+JSON mutation
+czyli:
+Remove field
+Null field
+Empty array
+Wrong type
+Huge value
+30. MVP 0.3
+Potem:
+Scenario Builder
+31. MVP 0.4
+Potem:
+Recorder
+32. MVP 0.5
+Potem:
+Error detection
+czyli:
+Console
+Network
+Unhandled errors
+33. MVP 1.0
+Dopiero wtedy:
+Auto Chaos
+Reports
+GitHub
+Jira
+Team scenarios
+34. UI
+Nie robiłbym klasycznego popupu jako głównego interfejsu.
+Najlepszy będzie:
+
+Chrome Side Panel
+Chrome udostępnia Side Panel API właśnie do panelu, który może pozostawać otwarty podczas przełączania kart.
+UI:
+
+┌────────────────────────────┐
+│ 🔥 BreakPoint              │
+│ my-app.com                 │
+├────────────────────────────┤
+│                            │
+│ QUICK CHAOS                │
+│                            │
+│ [ 🐌 Slow Network ]        │
+│ [ 📴 Offline ]              │
+│ [ 💥 Backend Down ]        │
+│ [ 👻 Missing Data ]        │
+│                            │
+├────────────────────────────┤
+│ CUSTOM                     │
+│                            │
+│ Network                    │
+│ ○ Normal                   │
+│ ● 3G                       │
+│ ○ Offline                  │
+│                            │
+│ API                        │
+│ Error rate       20%       │
+│ ─────────●────             │
+│                            │
+├────────────────────────────┤
+│        🔥 BREAK IT         │
+└────────────────────────────┘
+35. UX, który może być naszym wyróżnikiem
+Chcę uniknąć konfiguracji typu:
+URL pattern → request matcher → regex → rule → response override...
+Programista powinien móc zrobić:
+„Zepsuj mi checkout.”
+i tyle.
+AI/automatyka może później sama znaleźć:
+
+GET /cart
+GET /products
+POST /payment
+i zaproponować:
+Checkout failure scenarios:
+
+☑ Payment fails
+☑ Cart unavailable
+☑ Product unavailable
+☑ Session expired
+☑ Network timeout
+36. Nazwa
+Kilka kierunków:
+🔥 BreakPoint
+Najlepsza marketingowo, ale nazwa jest oczywiście mocno obciążona znaczeniami programistycznymi.
+💥 BreakTheWeb
+Bardzo jasne.
+🧨 Chaos
+Krótka, ale trudna brandingowo.
+🧪 WebFault
+Bardziej profesjonalne.
+💣 FailSafe
+Fajna, ale nazwa sugeruje coś odwrotnego.
+🔥 ChaosKit
+Dobra dla devtool.
+💀 KillSwitch
+Za agresywna.
+🧪 FaultLab
+Moim zdaniem bardzo dobra.
+FaultLab
+Break your app before your users do.
+To już brzmi jak produkt B2B.
+37. Model biznesowy
+Free
+Network throttling
+Offline
+Basic API failures
+3 scenarios
+Pro — np. $8–12/mies.
+Unlimited scenarios
+API mutation
+Data chaos
+Recorder
+Reports
+Advanced rules
+Team — np. $20/user
+Shared scenarios
+Team presets
+GitHub
+Jira
+CI integration
+Central configuration
+38. Najciekawszy etap później
+Możemy zrobić:
+FaultLab CLI
+faultlab run checkout-from-hell
+i:
+Browser
+↓
+FaultLab Extension
+↓
+Scenario
+↓
+Playwright
+↓
+Report
+A następnie CI:
+- run: faultlab test
+I pipeline:
+🔥 Fault injection tests
+
+Checkout
+✓ backend down
+✓ timeout
+✓ empty cart
+✗ payment 500 → application crashed
+Wtedy rozszerzenie przestaje być tylko rozszerzeniem Chrome.
+Staje się platformą chaos testingu dla aplikacji webowych.
+
+39. Docelowa architektura produktu
+                         FaultLab
+                            │
+          ┌─────────────────┼─────────────────┐
+          │                 │                 │
+          ↓                 ↓                 ↓
+      Browser            CLI             Playwright
+    Extension
+          │                 │                 │
+          └─────────────────┼─────────────────┘
+                            ↓
+                    Scenario Engine
+                            │
+          ┌─────────────────┼──────────────────┐
+          ↓                 ↓                  ↓
+       Network             API               Data
+       Chaos              Chaos              Chaos
+          │                 │                  │
+          └─────────────────┼──────────────────┘
+                            ↓
+                    Failure Detection
+                            ↓
+                         Reports
+                            ↓
+                   GitHub / Jira / CI
+40. Kolejność budowania
+Ja zrobiłbym to dokładnie tak:
+PHASE 1
+├── Chrome Extension
+├── React UI
+├── Side Panel
+├── MV3
+└── Network throttling
+
+PHASE 2
+├── Request interception
+├── 4xx / 5xx
+├── delay
+├── timeout
+└── random failure
+
+PHASE 3
+├── Rule engine
+├── URL matcher
+├── method matcher
+├── headers matcher
+└── response matcher
+
+PHASE 4
+├── JSON mutation
+├── null injection
+├── field removal
+├── type mutation
+└── payload stress
+
+PHASE 5
+├── Scenario engine
+├── scenario editor
+├── presets
+└── import/export
+
+PHASE 6
+├── Console monitoring
+├── runtime errors
+├── network errors
+└── failure correlation
+
+PHASE 7
+├── Recorder
+├── Auto Chaos
+└── reports
+
+PHASE 8
+├── Playwright
+├── CLI
+├── GitHub
+└── Jira
+🎯 I najważniejsze: jak bym to zaczął
+Nie zaczynałbym od budowania 40 funkcji.
+Pierwszy działający prototyp powinien pozwolić zrobić tylko to:
+
+1. Otwierasz dowolną stronę.
+
+2. Otwierasz FaultLab.
+
+3. Klikasz Backend Down.
+
+4. Wtyczka znajduje requesty XHR/fetch.
+
+5. Losowo zamienia np. 30% odpowiedzi na 500.
+
+6. Strona nadal działa, ale możesz zobaczyć, co się zepsuło.
+
+7. FaultLab pokazuje:
+
+🔥 3 failures detected
+
+POST /api/cart       500
+GET  /api/user       500
+POST /api/checkout   timeout
+
+Application errors:
+❌ Unhandled promise rejection
+❌ Checkout component crashed
+To jest pierwszy moment, w którym mamy produkt, a nie tylko eksperymentalne API.
+A później dokładamy kolejne warstwy.
+
+I tutaj widzę naprawdę fajny projekt do zrobienia od zera: repo, architektura monorepo, dokładny manifest.json, komunikacja między service workerem / content script / DevTools / Side Panel, model Rule i Scenario, matcher requestów, silnik failure injection, UI oraz pierwszy działający MVP. Możemy go zaplanować tak, żebyś mógł od razu zacząć implementację w TypeScript/React.
