@@ -79,12 +79,18 @@ Remaining recorder work: support richer generated actions and add explicit sessi
 
 ## MVP 0.5 - Error Detection
 
-Monitor:
+Status: first local monitoring slice implemented in the `feature/error-detection` branch.
+
+Monitor locally:
 
 - console errors;
 - network failures;
 - runtime errors;
 - unhandled promise rejections.
+
+The Side Panel can start, stop, and clear monitoring for the selected tab. It keeps up to 500 issues in
+`faultlab.runtime` and displays the latest entries. Error grouping, filtering, export, and historical
+reports remain future work.
 
 ## MVP 1.0
 

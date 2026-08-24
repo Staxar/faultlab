@@ -52,6 +52,18 @@ The recorder is a compact workflow in the Side Panel:
 
 Recording must be visibly active, keep request URLs and selectors truncated in the list, and make the local-only behavior clear. Starting a recording disables an active chaos scenario so the observations represent normal application traffic. The timeline shows navigation, click, and form-change milestones without storing field values. The initial generated action is an 800 ms request delay and remains editable.
 
+## Error Detection Flow
+
+The error monitor is a separate Side Panel workflow:
+
+1. start monitoring on the selected tab;
+2. exercise the application normally;
+3. review the latest errors grouped by source type;
+4. clear the local issue list when starting a new investigation;
+5. stop monitoring when the investigation is complete.
+
+Monitoring must show an explicit active state and keep messages and sources truncated. It must not imply that issues are sent to a server or collected from other tabs.
+
 ## Local-First Behavior
 
 Draft and saved configuration stays in Chrome local storage. The UI should never imply that scenarios are shared, synchronized, or active in every tab when the adapter only controls the selected tab.

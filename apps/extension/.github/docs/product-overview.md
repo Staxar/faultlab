@@ -63,3 +63,7 @@ Combines multiple chaos sources.
 ## Recorder
 
 The first recorder slice observes network requests, navigation, clicks, and form changes locally while the user browses the selected tab. Users can review the journey timeline, select observed requests, and create a custom scenario containing delay rules for those endpoints. Richer action inference remains future work.
+
+## Error Detection
+
+The first monitoring slice collects console errors, failed network requests, runtime exceptions, and unhandled Promise rejections locally for the selected tab. The Side Panel shows the latest issues and supports clearing the local list.
