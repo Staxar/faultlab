@@ -1,4 +1,8 @@
-import { validateScenario, type RuntimeMessage, type Scenario } from "@faultlab/core";
+import {
+  validateScenario,
+  type RuntimeMessage,
+  type Scenario,
+} from "@faultlab/core";
 
 export const FAULTLAB_CHANNEL = "faultlab";
 
@@ -152,9 +156,7 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
     ) {
       return false;
     }
-    return (
-      issue.type === "runtime" || issue.type === "unhandledrejection"
-    );
+    return issue.type === "runtime" || issue.type === "unhandledrejection";
   }
   if (
     candidate.type === "START_ERROR_MONITORING" ||

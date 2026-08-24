@@ -25,27 +25,78 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isPersistedRule(value: unknown): value is FaultRule {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string" || typeof value.enabled !== "boolean" || !isRecord(value.matcher) || !isRecord(value.action)) return false;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.enabled !== "boolean" ||
+    !isRecord(value.matcher) ||
+    !isRecord(value.action)
+  )
+    return false;
   const actionType = value.action.type;
-  if (![
-    "error",
-    "delay",
-    "throttle",
-    "mutate",
-    "offline",
-  ].includes(String(actionType)) || typeof value.action.probability !== "number") return false;
-  if (value.maxApplications !== undefined && typeof value.maxApplications !== "number") return false;
+  if (
+    !["error", "delay", "throttle", "mutate", "offline"].includes(
+      String(actionType),
+    ) ||
+    typeof value.action.probability !== "number"
+  )
+    return false;
+  if (
+    value.maxApplications !== undefined &&
+    typeof value.maxApplications !== "number"
+  )
+    return false;
   const matcher = value.matcher;
-  if (matcher.urlIncludes !== undefined && typeof matcher.urlIncludes !== "string") return false;
-  if (matcher.graphqlOperationName !== undefined && typeof matcher.graphqlOperationName !== "string") return false;
-  if (matcher.methods !== undefined && (!Array.isArray(matcher.methods) || matcher.methods.some((method) => typeof method !== "string"))) return false;
-  if (matcher.resourceTypes !== undefined && (!Array.isArray(matcher.resourceTypes) || matcher.resourceTypes.some((type) => typeof type !== "string"))) return false;
-  if (actionType === "mutate" && (!Array.isArray(value.action.mutations) || value.action.mutations.some((mutation) => !isRecord(mutation) || typeof mutation.path !== "string" || typeof mutation.op !== "string"))) return false;
+  if (
+    matcher.urlIncludes !== undefined &&
+    typeof matcher.urlIncludes !== "string"
+  )
+    return false;
+  if (
+    matcher.graphqlOperationName !== undefined &&
+    typeof matcher.graphqlOperationName !== "string"
+  )
+    return false;
+  if (
+    matcher.methods !== undefined &&
+    (!Array.isArray(matcher.methods) ||
+      matcher.methods.some((method) => typeof method !== "string"))
+  )
+    return false;
+  if (
+    matcher.resourceTypes !== undefined &&
+    (!Array.isArray(matcher.resourceTypes) ||
+      matcher.resourceTypes.some((type) => typeof type !== "string"))
+  )
+    return false;
+  if (
+    actionType === "mutate" &&
+    (!Array.isArray(value.action.mutations) ||
+      value.action.mutations.some(
+        (mutation) =>
+          !isRecord(mutation) ||
+          typeof mutation.path !== "string" ||
+          typeof mutation.op !== "string",
+      ))
+  )
+    return false;
   return true;
 }
 
-function normalizeScenario(value: unknown, defaultIds: Set<string>): Scenario | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string" || typeof value.description !== "string" || !Array.isArray(value.rules) || !value.rules.every(isPersistedRule)) return null;
+function normalizeScenario(
+  value: unknown,
+  defaultIds: Set<string>,
+): Scenario | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.description !== "string" ||
+    !Array.isArray(value.rules) ||
+    !value.rules.every(isPersistedRule)
+  )
+    return null;
   const scenario = {
     id: value.id,
     name: value.name,
@@ -61,9 +112,23 @@ function normalizeScenario(value: unknown, defaultIds: Set<string>): Scenario | 
 }
 
 function normalizeRecordedRequest(value: unknown): RecordedRequest | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.url !== "string" || typeof value.method !== "string") return null;
-  if (value.resourceType !== undefined && typeof value.resourceType !== "string") return null;
-  if (value.graphqlOperationName !== undefined && typeof value.graphqlOperationName !== "string") return null;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.url !== "string" ||
+    typeof value.method !== "string"
+  )
+    return null;
+  if (
+    value.resourceType !== undefined &&
+    typeof value.resourceType !== "string"
+  )
+    return null;
+  if (
+    value.graphqlOperationName !== undefined &&
+    typeof value.graphqlOperationName !== "string"
+  )
+    return null;
   return {
     id: value.id,
     url: value.url,
@@ -74,24 +139,51 @@ function normalizeRecordedRequest(value: unknown): RecordedRequest | null {
 }
 
 function normalizeRecordedEvent(value: unknown): RuntimeRecordedEvent | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp)) return null;
-  if (value.type === "navigation" && typeof value.url === "string") return value as RuntimeRecordedEvent;
-  if (value.type === "interaction" && (value.action === "click" || value.action === "change") && typeof value.target === "string") return value as RuntimeRecordedEvent;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.timestamp !== "number" ||
+    !Number.isFinite(value.timestamp)
+  )
+    return null;
+  if (value.type === "navigation" && typeof value.url === "string")
+    return value as RuntimeRecordedEvent;
+  if (
+    value.type === "interaction" &&
+    (value.action === "click" || value.action === "change") &&
+    typeof value.target === "string"
+  )
+    return value as RuntimeRecordedEvent;
   return null;
 }
 
 function normalizeDetectedIssue(value: unknown): DetectedIssue | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp) || typeof value.tabId !== "number" || typeof value.message !== "string") return null;
-  if (!["console", "network", "runtime", "unhandledrejection"].includes(String(value.type))) return null;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.timestamp !== "number" ||
+    !Number.isFinite(value.timestamp) ||
+    typeof value.tabId !== "number" ||
+    typeof value.message !== "string"
+  )
+    return null;
+  if (
+    !["console", "network", "runtime", "unhandledrejection"].includes(
+      String(value.type),
+    )
+  )
+    return null;
   if (
     (value.source !== undefined && typeof value.source !== "string") ||
     (value.url !== undefined && typeof value.url !== "string") ||
     (value.status !== undefined && typeof value.status !== "number") ||
-    (value.injectionId !== undefined && typeof value.injectionId !== "string") ||
+    (value.injectionId !== undefined &&
+      typeof value.injectionId !== "string") ||
     (value.scenarioId !== undefined && typeof value.scenarioId !== "string") ||
     (value.ruleId !== undefined && typeof value.ruleId !== "string") ||
     (value.requestId !== undefined && typeof value.requestId !== "string")
-  ) return null;
+  )
+    return null;
   return {
     id: value.id,
     timestamp: value.timestamp,
@@ -101,19 +193,42 @@ function normalizeDetectedIssue(value: unknown): DetectedIssue | null {
     ...(typeof value.source === "string" ? { source: value.source } : {}),
     ...(typeof value.url === "string" ? { url: value.url } : {}),
     ...(typeof value.status === "number" ? { status: value.status } : {}),
-    ...(typeof value.injectionId === "string" ? { injectionId: value.injectionId } : {}),
-    ...(typeof value.scenarioId === "string" ? { scenarioId: value.scenarioId } : {}),
+    ...(typeof value.injectionId === "string"
+      ? { injectionId: value.injectionId }
+      : {}),
+    ...(typeof value.scenarioId === "string"
+      ? { scenarioId: value.scenarioId }
+      : {}),
     ...(typeof value.ruleId === "string" ? { ruleId: value.ruleId } : {}),
-    ...(typeof value.requestId === "string" ? { requestId: value.requestId } : {}),
+    ...(typeof value.requestId === "string"
+      ? { requestId: value.requestId }
+      : {}),
   };
 }
 
 function normalizeFaultInjection(value: unknown): FaultInjection | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.timestamp !== "number" || !Number.isFinite(value.timestamp) || typeof value.tabId !== "number" || typeof value.url !== "string" || typeof value.method !== "string" || typeof value.ruleId !== "string" || typeof value.action !== "string") return null;
-  if (value.requestId !== undefined && typeof value.requestId !== "string") return null;
-  if (value.scenarioId !== undefined && typeof value.scenarioId !== "string") return null;
-  if (value.status !== undefined && typeof value.status !== "number") return null;
-  if (!["error", "delay", "throttle", "mutate", "offline"].includes(value.action)) return null;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.timestamp !== "number" ||
+    !Number.isFinite(value.timestamp) ||
+    typeof value.tabId !== "number" ||
+    typeof value.url !== "string" ||
+    typeof value.method !== "string" ||
+    typeof value.ruleId !== "string" ||
+    typeof value.action !== "string"
+  )
+    return null;
+  if (value.requestId !== undefined && typeof value.requestId !== "string")
+    return null;
+  if (value.scenarioId !== undefined && typeof value.scenarioId !== "string")
+    return null;
+  if (value.status !== undefined && typeof value.status !== "number")
+    return null;
+  if (
+    !["error", "delay", "throttle", "mutate", "offline"].includes(value.action)
+  )
+    return null;
   return value as unknown as FaultInjection;
 }
 
@@ -136,14 +251,37 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
     }
   }
   const recorderValue = isRecord(value.recorder) ? value.recorder : {};
-  const recorderTabId = typeof recorderValue.tabId === "number" ? recorderValue.tabId : null;
-  const recorderRequests = Array.isArray(recorderValue.requests) ? recorderValue.requests.map(normalizeRecordedRequest).filter((request): request is RecordedRequest => request !== null) : [];
-  const recorderEvents = Array.isArray(recorderValue.events) ? recorderValue.events.map(normalizeRecordedEvent).filter((event): event is RuntimeRecordedEvent => event !== null) : [];
+  const recorderTabId =
+    typeof recorderValue.tabId === "number" ? recorderValue.tabId : null;
+  const recorderRequests = Array.isArray(recorderValue.requests)
+    ? recorderValue.requests
+        .map(normalizeRecordedRequest)
+        .filter((request): request is RecordedRequest => request !== null)
+    : [];
+  const recorderEvents = Array.isArray(recorderValue.events)
+    ? recorderValue.events
+        .map(normalizeRecordedEvent)
+        .filter((event): event is RuntimeRecordedEvent => event !== null)
+    : [];
   const monitorValue = isRecord(value.errorMonitor) ? value.errorMonitor : {};
-  const monitorTabId = typeof monitorValue.tabId === "number" ? monitorValue.tabId : null;
-  const issues = Array.isArray(monitorValue.issues) ? monitorValue.issues.map(normalizeDetectedIssue).filter((issue): issue is DetectedIssue => issue !== null) : [];
-  const injections = Array.isArray(monitorValue.injections) ? monitorValue.injections.map(normalizeFaultInjection).filter((injection): injection is FaultInjection => injection !== null) : [];
-  const activeScenarioId = typeof value.activeScenarioId === "string" && scenarioIds.has(value.activeScenarioId) && value.enabled === true ? value.activeScenarioId : null;
+  const monitorTabId =
+    typeof monitorValue.tabId === "number" ? monitorValue.tabId : null;
+  const issues = Array.isArray(monitorValue.issues)
+    ? monitorValue.issues
+        .map(normalizeDetectedIssue)
+        .filter((issue): issue is DetectedIssue => issue !== null)
+    : [];
+  const injections = Array.isArray(monitorValue.injections)
+    ? monitorValue.injections
+        .map(normalizeFaultInjection)
+        .filter((injection): injection is FaultInjection => injection !== null)
+    : [];
+  const activeScenarioId =
+    typeof value.activeScenarioId === "string" &&
+    scenarioIds.has(value.activeScenarioId) &&
+    value.enabled === true
+      ? value.activeScenarioId
+      : null;
   return {
     enabled: value.enabled === true && activeScenarioId !== null,
     activeScenarioId,
@@ -338,7 +476,10 @@ chrome.runtime.onMessage.addListener(
           return { ok: false, error: "Stop recording before enabling chaos" };
         }
         if (typedMessage.enabled && state.activeScenarioId === null) {
-          return { ok: false, error: "Select a scenario before enabling chaos" };
+          return {
+            ok: false,
+            error: "Select a scenario before enabling chaos",
+          };
         }
         const next = {
           ...state,
@@ -481,8 +622,9 @@ chrome.runtime.onMessage.addListener(
         return { ok: true, state: next };
       }
       if (typedMessage.type === "START_RECORDING") {
-        const activeTabId =
-          (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+        const activeTabId = (
+          await chrome.tabs.query({ active: true, currentWindow: true })
+        )[0]?.id;
         if (activeTabId == null) {
           return { ok: false, error: "No active tab to record" };
         }
@@ -497,7 +639,12 @@ chrome.runtime.onMessage.addListener(
           ...state,
           enabled: false,
           activeScenarioId: null,
-          recorder: { active: true, tabId: activeTabId, requests: [], events: [] },
+          recorder: {
+            active: true,
+            tabId: activeTabId,
+            requests: [],
+            events: [],
+          },
         };
         await chrome.storage.local.set({ [KEY]: next });
         await syncNetwork(next);
@@ -523,15 +670,13 @@ chrome.runtime.onMessage.addListener(
         return { ok: true, state: next };
       }
       if (typedMessage.type === "START_ERROR_MONITORING") {
-        const activeTabId =
-          (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+        const activeTabId = (
+          await chrome.tabs.query({ active: true, currentWindow: true })
+        )[0]?.id;
         if (activeTabId == null) {
           return { ok: false, error: "No active tab to monitor" };
         }
-        if (
-          state.recorder.active &&
-          state.recorder.tabId !== activeTabId
-        ) {
+        if (state.recorder.active && state.recorder.tabId !== activeTabId) {
           return { ok: false, error: "Stop recording on the other tab first" };
         }
         if (

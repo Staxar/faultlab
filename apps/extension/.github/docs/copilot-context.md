@@ -69,6 +69,6 @@ Current boundaries:
 
 - Browser Chaos, UI Chaos, Auto Chaos, reports, DevTools, CLI, Playwright, integrations, and team workflows are not implemented.
 - Error monitoring groups local issues and correlates them with recent injections when request identity or a
-	bounded time/origin match is available; export reports are not implemented.
+  bounded time/origin match is available; export reports are not implemented.
 - Runtime storage and incoming messages are untrusted and must be normalized and validated at the background boundary.
 - A debugger-backed recorder or error monitor owns one selected tab at a time.

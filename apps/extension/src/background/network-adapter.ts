@@ -58,11 +58,20 @@ export class ChromeNetworkAdapter {
       if (method === "Fetch.requestPaused") {
         void this.handleRequest(source.tabId, params as RequestPausedEvent);
       } else if (method === "Runtime.consoleAPICalled") {
-        this.handleConsoleIssue(source.tabId, params as Record<string, unknown>);
+        this.handleConsoleIssue(
+          source.tabId,
+          params as Record<string, unknown>,
+        );
       } else if (method === "Runtime.exceptionThrown") {
-        this.handleRuntimeIssue(source.tabId, params as Record<string, unknown>);
+        this.handleRuntimeIssue(
+          source.tabId,
+          params as Record<string, unknown>,
+        );
       } else if (method === "Network.loadingFailed") {
-        this.handleNetworkIssue(source.tabId, params as Record<string, unknown>);
+        this.handleNetworkIssue(
+          source.tabId,
+          params as Record<string, unknown>,
+        );
       }
     });
 
@@ -311,7 +320,9 @@ export class ChromeNetworkAdapter {
     if (tabId !== this.attachedTabId) return;
 
     try {
-      const graphqlOperationName = getGraphqlOperationName(event.request.postData);
+      const graphqlOperationName = getGraphqlOperationName(
+        event.request.postData,
+      );
       const endpoint = normalizeEndpoint(event.request.url);
       const recordedId = `${tabId}:${event.requestId}`;
       if (this.recording && !this.recordedRequestIds.has(recordedId)) {
@@ -562,8 +573,7 @@ export class ChromeNetworkAdapter {
     this.recordDetectedIssue(tabId, {
       type: "runtime",
       message,
-      source:
-        typeof details.url === "string" ? details.url : undefined,
+      source: typeof details.url === "string" ? details.url : undefined,
     });
   }
 
@@ -572,7 +582,9 @@ export class ChromeNetworkAdapter {
     params: Record<string, unknown>,
   ): void {
     const errorText =
-      typeof params.errorText === "string" ? params.errorText : "Unknown network error";
+      typeof params.errorText === "string"
+        ? params.errorText
+        : "Unknown network error";
     const requestId =
       typeof params.requestId === "string" ? params.requestId : undefined;
     this.recordDetectedIssue(tabId, {
@@ -583,7 +595,9 @@ export class ChromeNetworkAdapter {
   }
 
   private stackSource(stackTrace: unknown): string | undefined {
-    const trace = stackTrace as { callFrames?: Array<{ url?: unknown }> } | undefined;
+    const trace = stackTrace as
+      | { callFrames?: Array<{ url?: unknown }> }
+      | undefined;
     const url = trace?.callFrames?.[0]?.url;
     return typeof url === "string" && url ? url : undefined;
   }
@@ -593,12 +607,14 @@ export class ChromeNetworkAdapter {
     issue: Omit<DetectedIssue, "id" | "timestamp" | "tabId">,
   ): void {
     if (!this.monitoring || this.attachedTabId !== tabId) return;
-    this.detectedIssues.push(this.withCorrelation({
-      ...issue,
-      id: `issue-${crypto.randomUUID()}`,
-      timestamp: Date.now(),
-      tabId,
-    }));
+    this.detectedIssues.push(
+      this.withCorrelation({
+        ...issue,
+        id: `issue-${crypto.randomUUID()}`,
+        timestamp: Date.now(),
+        tabId,
+      }),
+    );
     if (this.detectedIssues.length > MAX_DETECTED_ISSUES) {
       this.detectedIssues.shift();
     }
@@ -637,16 +653,14 @@ export class ChromeNetworkAdapter {
     const issueOrigin = issue.url ? this.originOf(issue.url) : undefined;
     const related =
       explicit ??
-      [...this.faultInjections]
-        .reverse()
-        .find((injection) => {
-          const withinWindow =
-            Math.abs(injection.timestamp - issue.timestamp) <= 10000;
-          const sameOrigin =
-            issueOrigin === undefined ||
-            this.originOf(injection.url) === issueOrigin;
-          return withinWindow && sameOrigin;
-        });
+      [...this.faultInjections].reverse().find((injection) => {
+        const withinWindow =
+          Math.abs(injection.timestamp - issue.timestamp) <= 10000;
+        const sameOrigin =
+          issueOrigin === undefined ||
+          this.originOf(injection.url) === issueOrigin;
+        return withinWindow && sameOrigin;
+      });
     if (!related) return issue;
     return {
       ...issue,
