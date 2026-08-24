@@ -61,6 +61,6 @@ Current slice:
 - Supported mutations are field removal, nullification, empty arrays, and representative type mismatches.
 - Non-JSON, unreadable, or oversized responses pass through unchanged.
 
-Next planned slice:
+Current development slice:
 
-MVP 0.3 will make presets configurable and add simple custom scenarios. Error detection belongs to MVP 0.5.
+MVP 0.3 makes presets configurable and supports local custom scenarios with multiple rules, bounded per-request application limits, and broad-matcher confirmation. The first MVP 0.4 recorder slice observes up to 500 network requests locally and turns selected observations into editable delay scenarios. Error detection belongs to MVP 0.5.

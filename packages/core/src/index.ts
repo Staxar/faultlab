@@ -31,6 +31,7 @@ export interface FaultRule {
   id: string;
   name: string;
   enabled: boolean;
+  maxApplications?: number;
   matcher: RequestMatcher;
   action: RuleAction;
 }
@@ -39,13 +40,43 @@ export interface Scenario {
   id: string;
   name: string;
   description: string;
+  builtIn: boolean;
   rules: FaultRule[];
 }
+
+export interface RecordedRequest {
+  id: string;
+  url: string;
+  method: string;
+  resourceType?: string;
+  graphqlOperationName?: string;
+}
+
+export type RecordedEvent =
+  | {
+      id: string;
+      timestamp: number;
+      type: "navigation";
+      url: string;
+    }
+  | {
+      id: string;
+      timestamp: number;
+      type: "interaction";
+      action: "click" | "change";
+      target: string;
+    };
 
 export interface RuntimeState {
   enabled: boolean;
   activeScenarioId: string | null;
   scenarios: Scenario[];
+  recorder: {
+    active: boolean;
+    tabId: number | null;
+    requests: RecordedRequest[];
+    events: RecordedEvent[];
+  };
 }
 
 const VALID_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
@@ -65,7 +96,18 @@ export type RuntimeMessage =
   | { type: "ACTIVATE_SCENARIO"; scenarioId: string }
   | { type: "DEACTIVATE_SCENARIO" }
   | { type: "UPDATE_SCENARIO"; scenario: Scenario }
-  | { type: "RESET_SCENARIO"; scenarioId: string };
+  | { type: "RESET_SCENARIO"; scenarioId: string }
+  | { type: "CREATE_SCENARIO"; scenario: Scenario }
+  | { type: "DELETE_SCENARIO"; scenarioId: string }
+  | { type: "START_RECORDING" }
+  | { type: "STOP_RECORDING" }
+  | { type: "CLEAR_RECORDING" }
+  | {
+      type: "CREATE_SCENARIO_FROM_RECORDING";
+      name: string;
+      requestIds: string[];
+    }
+  | { type: "RECORD_EVENT"; event: RecordedEvent };
 
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";
@@ -78,6 +120,14 @@ export function validateScenario(scenario: Scenario): string | null {
     if (!rule.id || ruleIds.has(rule.id)) return "Rule IDs must be unique";
     ruleIds.add(rule.id);
     if (!rule.name.trim()) return "Rule name is required";
+    if (
+      rule.maxApplications !== undefined &&
+      (!Number.isInteger(rule.maxApplications) ||
+        rule.maxApplications < 1 ||
+        rule.maxApplications > 1000)
+    ) {
+      return "Application limit must be between 1 and 1000";
+    }
     if (rule.matcher.urlIncludes && rule.matcher.urlIncludes.length > 200) {
       return "URL matcher is too long";
     }
@@ -171,6 +221,58 @@ export function matchesRule(rule: FaultRule, request: RequestContext): boolean {
   return true;
 }
 
+export function createScenarioFromRecordedRequests(
+  name: string,
+  requests: RecordedRequest[],
+  scenarioId: string,
+): Scenario {
+  const uniqueRequests = new Map<string, RecordedRequest>();
+  for (const request of requests) {
+    const endpoint = normalizeRecordedEndpoint(request.url);
+    const key = [
+      endpoint,
+      request.method.toUpperCase(),
+      request.resourceType ?? "",
+      request.graphqlOperationName ?? "",
+    ].join("|");
+    if (endpoint && !uniqueRequests.has(key)) {
+      uniqueRequests.set(key, { ...request, url: endpoint });
+    }
+  }
+
+  return {
+    id: scenarioId,
+    name: name.trim() || "Recorded scenario",
+    description: "Generated from locally recorded network requests.",
+    builtIn: false,
+    rules: [...uniqueRequests.values()].map((request, index) => ({
+      id: `recorded-rule-${index + 1}`,
+      name: `${request.method.toUpperCase()} ${request.url}`.slice(0, 50),
+      enabled: true,
+      matcher: {
+        urlIncludes: request.url,
+        methods: [request.method.toUpperCase()],
+        ...(request.resourceType
+          ? { resourceTypes: [request.resourceType] }
+          : {}),
+        ...(request.graphqlOperationName
+          ? { graphqlOperationName: request.graphqlOperationName }
+          : {}),
+      },
+      action: { type: "delay", delayMs: 800, probability: 1 },
+    })),
+  };
+}
+
+function normalizeRecordedEndpoint(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return value || undefined;
+  }
+}
+
 export function shouldApply(
   probability: number,
   random = Math.random(),
@@ -183,6 +285,7 @@ export const defaultScenarios: Scenario[] = [
     id: "backend-down",
     name: "Backend Down",
     description: "Turn fetch/XHR requests into HTTP 500 responses.",
+    builtIn: true,
     rules: [
       {
         id: "backend-down-500",
@@ -197,6 +300,7 @@ export const defaultScenarios: Scenario[] = [
     id: "slow-network",
     name: "Slow Network",
     description: "Add 800ms latency and bandwidth limits to requests.",
+    builtIn: true,
     rules: [
       {
         id: "slow-network-throttle",
@@ -224,6 +328,7 @@ export const defaultScenarios: Scenario[] = [
     id: "offline",
     name: "Offline",
     description: "Fail selected network requests as disconnected.",
+    builtIn: true,
     rules: [
       {
         id: "offline",
@@ -238,6 +343,7 @@ export const defaultScenarios: Scenario[] = [
     id: "bad-data",
     name: "Bad Data",
     description: "Mutate JSON responses to expose fragile data handling.",
+    builtIn: true,
     rules: [
       {
         id: "bad-data-remove-id",

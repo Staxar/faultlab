@@ -5,9 +5,13 @@ import {
   matchesRule,
   shouldApply,
   type FaultRule,
+  type RecordedEvent,
+  type RecordedRequest,
 } from "@faultlab/core";
 
 const MAX_MUTATION_BODY_BYTES = 5 * 1024 * 1024;
+const MAX_RECORDED_REQUESTS = 500;
+const MAX_RECORDED_EVENTS = 500;
 
 type ResponseHeader = { name: string; value: string };
 
@@ -32,6 +36,12 @@ export class ChromeNetworkAdapter {
   private observedUrls = new Set<string>();
   private observedGraphqlOperations = new Set<string>();
   private observedJsonPaths = new Set<string>();
+  private applicationCounts = new Map<string, number>();
+  private recording = false;
+  private recordedRequests: RecordedRequest[] = [];
+  private recordedRequestIds = new Set<string>();
+  private recordedEvents: RecordedEvent[] = [];
+  private restoredRecordedRequests = false;
 
   constructor() {
     chrome.debugger.onEvent.addListener((source, method, params) => {
@@ -48,9 +58,13 @@ export class ChromeNetworkAdapter {
     });
   }
 
-  async applyRules(tabId: number, rules: FaultRule[]): Promise<void> {
+  async applyRules(
+    tabId: number,
+    rules: FaultRule[],
+    recording = false,
+  ): Promise<void> {
     const operation = this.operation.then(() =>
-      this.applyRulesNow(tabId, rules),
+      this.applyRulesNow(tabId, rules, recording),
     );
     this.operation = operation.then(
       () => undefined,
@@ -70,6 +84,42 @@ export class ChromeNetworkAdapter {
 
   getGraphqlOperations(): string[] {
     return [...this.observedGraphqlOperations].sort();
+  }
+
+  getRecordedRequests(): RecordedRequest[] {
+    return [...this.recordedRequests];
+  }
+
+  getRecordedEvents(): RecordedEvent[] {
+    return [...this.recordedEvents];
+  }
+
+  clearRecordedRequests(): void {
+    this.recordedRequests = [];
+    this.recordedRequestIds.clear();
+    this.recordedEvents = [];
+  }
+
+  restoreRecordedRequests(
+    requests: RecordedRequest[],
+    events: RecordedEvent[] = [],
+  ): void {
+    if (this.restoredRecordedRequests) return;
+    this.restoredRecordedRequests = true;
+    this.recordedRequests = requests.slice(-MAX_RECORDED_REQUESTS);
+    this.recordedRequestIds = new Set(
+      this.recordedRequests.map((request) => request.id),
+    );
+    this.recordedEvents = events.slice(-MAX_RECORDED_EVENTS);
+  }
+
+  recordEvent(tabId: number, event: RecordedEvent): boolean {
+    if (!this.recording || this.attachedTabId !== tabId) return false;
+    this.recordedEvents.push(event);
+    if (this.recordedEvents.length > MAX_RECORDED_EVENTS) {
+      this.recordedEvents.shift();
+    }
+    return true;
   }
 
   getDiscoveredData(): {
@@ -94,6 +144,7 @@ export class ChromeNetworkAdapter {
   private async applyRulesNow(
     tabId: number,
     rules: FaultRule[],
+    recording: boolean,
   ): Promise<void> {
     if (this.attachedTabId !== tabId) {
       await this.stopNow();
@@ -138,6 +189,8 @@ export class ChromeNetworkAdapter {
               uploadThroughput: -1,
             },
       );
+      this.applicationCounts.clear();
+      this.recording = recording;
       this.rules = rules;
     } catch (error) {
       await this.stopNow();
@@ -148,6 +201,8 @@ export class ChromeNetworkAdapter {
 
   private async stopNow(): Promise<void> {
     this.rules = [];
+    this.recording = false;
+    this.applicationCounts.clear();
     this.clearPendingTimeouts();
     if (this.attachedTabId == null) return;
     const tabId = this.attachedTabId;
@@ -182,6 +237,21 @@ export class ChromeNetworkAdapter {
     try {
       const graphqlOperationName = getGraphqlOperationName(event.request.postData);
       const endpoint = normalizeEndpoint(event.request.url);
+      const recordedId = `${tabId}:${event.requestId}`;
+      if (this.recording && !this.recordedRequestIds.has(recordedId)) {
+        this.recordedRequestIds.add(recordedId);
+        this.recordedRequests.push({
+          id: recordedId,
+          url: event.request.url,
+          method: event.request.method.toUpperCase(),
+          resourceType: event.resourceType?.toLowerCase(),
+          graphqlOperationName,
+        });
+        if (this.recordedRequests.length > MAX_RECORDED_REQUESTS) {
+          const removed = this.recordedRequests.shift();
+          if (removed) this.recordedRequestIds.delete(removed.id);
+        }
+      }
       if (endpoint) this.observedUrls.add(endpoint);
       if (graphqlOperationName) {
         this.observedGraphqlOperations.add(graphqlOperationName);
@@ -196,6 +266,7 @@ export class ChromeNetworkAdapter {
         (candidate) =>
           candidate.action.type !== "throttle" &&
           candidate.action.type !== "mutate" &&
+          this.hasRemainingApplications(candidate) &&
           matchesRule(candidate, {
             url: event.request.url,
             method: event.request.method,
@@ -212,6 +283,7 @@ export class ChromeNetworkAdapter {
       }
 
       if (rule.action.type === "error") {
+        this.recordApplication(rule);
         await chrome.debugger.sendCommand({ tabId }, "Fetch.fulfillRequest", {
           requestId: event.requestId,
           responseCode: rule.action.status,
@@ -224,6 +296,7 @@ export class ChromeNetworkAdapter {
       }
 
       if (rule.action.type === "offline") {
+        this.recordApplication(rule);
         await chrome.debugger.sendCommand({ tabId }, "Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "InternetDisconnected",
@@ -262,6 +335,7 @@ export class ChromeNetworkAdapter {
         },
         Math.max(0, rule.action.delayMs),
       );
+      this.recordApplication(rule);
       this.pendingTimeouts.add(timeout);
     } catch (error) {
       console.warn("FaultLab could not handle intercepted request", error);
@@ -281,6 +355,7 @@ export class ChromeNetworkAdapter {
     const rule = this.rules.find(
       (candidate) =>
         candidate.action.type === "mutate" &&
+        this.hasRemainingApplications(candidate) &&
         matchesRule(candidate, {
           url: event.request.url,
           method: event.request.method,
@@ -342,6 +417,7 @@ export class ChromeNetworkAdapter {
         responseHeaders: responseHeadersForBody(event.responseHeaders),
         body: encodeBase64Utf8(mutatedBody),
       });
+      this.recordApplication(rule);
     } catch (error) {
       console.warn("FaultLab could not fulfill the mutated response", error);
       await continueResponse();
@@ -351,6 +427,21 @@ export class ChromeNetworkAdapter {
   private clearPendingTimeouts(): void {
     for (const timeout of this.pendingTimeouts) clearTimeout(timeout);
     this.pendingTimeouts.clear();
+  }
+
+  private hasRemainingApplications(rule: FaultRule): boolean {
+    return (
+      rule.maxApplications === undefined ||
+      (this.applicationCounts.get(rule.id) ?? 0) < rule.maxApplications
+    );
+  }
+
+  private recordApplication(rule: FaultRule): void {
+    if (rule.maxApplications === undefined) return;
+    this.applicationCounts.set(
+      rule.id,
+      (this.applicationCounts.get(rule.id) ?? 0) + 1,
+    );
   }
 }
 

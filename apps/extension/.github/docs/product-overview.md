@@ -36,7 +36,7 @@ Mutate:
 - empty arrays
 - payload stress
 
-MVP 0.2 starts with JSON response mutation for Fetch/XHR requests. It supports removing fields, setting fields to `null`, replacing values with empty arrays, and applying representative type mismatches. MVP 0.3 now provides a Side Panel editor for configuring built-in rules; custom scenario authoring is the next slice.
+MVP 0.2 starts with JSON response mutation for Fetch/XHR requests. It supports removing fields, setting fields to `null`, replacing values with empty arrays, and applying representative type mismatches. MVP 0.3 provides a Side Panel editor for built-in rules and local custom scenarios with multiple rules, bounded per-request limits, and broad-matcher confirmation.
 
 ## Browser Chaos
 
@@ -62,4 +62,4 @@ Combines multiple chaos sources.
 
 ## Recorder
 
-Records user journeys.
+The first recorder slice observes network requests, navigation, clicks, and form changes locally while the user browses the selected tab. Users can review the journey timeline, select observed requests, and create a custom scenario containing delay rules for those endpoints. Richer action inference remains future work.

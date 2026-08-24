@@ -1,6 +1,6 @@
 # Releasing FaultLab
 
-This document describes the first `0.1.0` release and the process for future updates.
+This document describes the first `0.1.0` release and the process for future updates. The current unreleased development version is `0.2.0`.
 
 ## Release policy
 

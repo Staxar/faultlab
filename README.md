@@ -36,9 +36,9 @@ pnpm typecheck
 
 ## Current Status
 
-The first public release is `0.1.0`. It includes the completed network-chaos baseline, JSON response mutation, built-in preset configuration, and discovery of observed endpoints, GraphQL operations, and JSON fields. Non-JSON or unreadable responses pass through unchanged.
+The first public release was `0.1.0`. The current development version is `0.2.0` and adds local custom scenario CRUD, per-request application limits, broad-matcher confirmation, and a network recorder with a local journey timeline on top of the release capabilities. Non-JSON or unreadable responses pass through unchanged.
 
-Custom scenario CRUD, application limits, and multi-tab orchestration remain outside this release and are planned for future updates.
+Custom scenario CRUD is available in the development branch after `0.1.0`: create, edit, persist, and delete local scenarios with one or more rules. Application limits and multi-tab orchestration remain planned for future updates.
 
 ## Release
 

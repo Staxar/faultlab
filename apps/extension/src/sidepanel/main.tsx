@@ -4,6 +4,8 @@ import type {
   JsonMutation,
   RequestMatcher,
   RuleAction,
+  RecordedEvent,
+  RecordedRequest,
   RuntimeMessage,
   RuntimeState,
   Scenario,
@@ -14,6 +16,7 @@ const empty: RuntimeState = {
   enabled: false,
   activeScenarioId: null,
   scenarios: [],
+  recorder: { active: false, tabId: null, requests: [], events: [] },
 };
 type RuntimeResponse = {
   ok: boolean;
@@ -35,6 +38,77 @@ const MUTATION_TYPES: JsonMutation["op"][] = [
   "type_mismatch",
 ];
 const TARGET_TYPES = ["string", "number", "boolean", "null"] as const;
+const ACTION_TYPES: RuleAction["type"][] = [
+  "error",
+  "delay",
+  "throttle",
+  "offline",
+  "mutate",
+];
+
+function createAction(type: RuleAction["type"]): RuleAction {
+  if (type === "error") return { type, status: 500, probability: 1 };
+  if (type === "delay") return { type, delayMs: 800, probability: 1 };
+  if (type === "throttle") {
+    return {
+      type,
+      latencyMs: 0,
+      downloadKbps: 500,
+      uploadKbps: 500,
+      probability: 1,
+    };
+  }
+  if (type === "mutate") {
+    return { type, mutations: [{ op: "remove", path: "/field" }], probability: 1 };
+  }
+  return { type, probability: 1 };
+}
+
+function createCustomScenario(): Scenario {
+  return {
+    id: `custom-${crypto.randomUUID()}`,
+    name: "New scenario",
+    description: "A local custom failure scenario.",
+    builtIn: false,
+    rules: [
+      {
+        id: `rule-${crypto.randomUUID()}`,
+        name: "Failure rule",
+        enabled: true,
+        matcher: { resourceTypes: ["fetch", "xhr"] },
+        action: createAction("delay"),
+      },
+    ],
+  };
+}
+
+function createCustomRule(number: number) {
+  return {
+    id: `rule-${crypto.randomUUID()}`,
+    name: `Failure rule ${number}`,
+    enabled: true,
+    matcher: { resourceTypes: ["fetch", "xhr"] },
+    action: createAction("delay"),
+  };
+}
+
+function hasBroadMatcher(scenario: Scenario): boolean {
+  return scenario.rules.some((rule) => {
+    if (!rule.enabled) return false;
+    const matcher = rule.matcher;
+    return !(
+      matcher.urlIncludes ||
+      matcher.methods?.length ||
+      matcher.resourceTypes?.length ||
+      matcher.graphqlOperationName
+    );
+  });
+}
+
+function describeRecordedEvent(event: RecordedEvent): string {
+  if (event.type === "navigation") return `Navigated to ${event.url}`;
+  return `${event.action === "click" ? "Clicked" : "Changed"} ${event.target}`;
+}
 
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
   chrome.runtime.sendMessage(message);
@@ -43,6 +117,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Scenario | null>(null);
+  const [selectedRecordings, setSelectedRecordings] = useState<Set<string>>(
+    new Set(),
+  );
   const [discoveredData, setDiscoveredData] = useState<RuntimeResponse["discovered"]>({
     urls: [],
     graphqlOperations: [],
@@ -72,6 +149,15 @@ function App() {
       mounted = false;
     };
   }, []);
+  useEffect(() => {
+    if (!state.recorder.active) return;
+    const interval = window.setInterval(() => {
+      void send({ type: "GET_STATE" }).then((response) => {
+        if (response.state) setState(response.state);
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [state.recorder.active]);
   useEffect(() => {
     if (!draft) return;
     let mounted = true;
@@ -107,6 +193,42 @@ function App() {
           : "FaultLab could not apply the change",
       );
       return false;
+    }
+  };
+  const toggleRecordingSelection = (requestId: string) =>
+    setSelectedRecordings((current) => {
+      const next = new Set(current);
+      if (next.has(requestId)) next.delete(requestId);
+      else next.add(requestId);
+      return next;
+    });
+  const startRecording = async () => {
+    setSelectedRecordings(new Set());
+    await refresh({ type: "START_RECORDING" });
+  };
+  const stopRecording = async () => {
+    await refresh({ type: "STOP_RECORDING" });
+  };
+  const clearRecording = async () => {
+    setSelectedRecordings(new Set());
+    await refresh({ type: "CLEAR_RECORDING" });
+  };
+  const createFromRecording = async () => {
+    const requestIds = [...selectedRecordings];
+    if (requestIds.length === 0) {
+      setError("Select at least one recorded request");
+      return;
+    }
+    const name = window.prompt("Scenario name", "Recorded scenario");
+    if (name == null) return;
+    if (
+      await refresh({
+        type: "CREATE_SCENARIO_FROM_RECORDING",
+        name,
+        requestIds,
+      })
+    ) {
+      setSelectedRecordings(new Set());
     }
   };
   const updateDraft = (update: (scenario: Scenario) => Scenario) =>
@@ -149,9 +271,17 @@ function App() {
     setError(null);
     setDraft(structuredClone(scenario));
   };
+  const openNewEditor = () => {
+    setError(null);
+    setDraft(createCustomScenario());
+  };
   const saveDraft = async () => {
     if (!draft) return;
-    if (await refresh({ type: "UPDATE_SCENARIO", scenario: draft })) {
+    const exists = state.scenarios.some((scenario) => scenario.id === draft.id);
+    const message: RuntimeMessage = exists
+      ? { type: "UPDATE_SCENARIO", scenario: draft }
+      : { type: "CREATE_SCENARIO", scenario: draft };
+    if (await refresh(message)) {
       setDraft(null);
     }
   };
@@ -161,12 +291,37 @@ function App() {
       setDraft(null);
     }
   };
-  const activate = (s: Scenario) =>
-    void refresh(
-      state.activeScenarioId === s.id
-        ? { type: "DEACTIVATE_SCENARIO" }
-        : { type: "ACTIVATE_SCENARIO", scenarioId: s.id },
-    );
+  const activate = (s: Scenario) => {
+    if (state.activeScenarioId === s.id) {
+      void refresh({ type: "DEACTIVATE_SCENARIO" });
+      return;
+    }
+    if (
+      hasBroadMatcher(s) &&
+      !window.confirm(
+        `${s.name} contains a rule that matches all requests. Activate it?`,
+      )
+    ) {
+      return;
+    }
+    void refresh({ type: "ACTIVATE_SCENARIO", scenarioId: s.id });
+  };
+    const deleteScenario = async (scenario: Scenario) => {
+      if (!window.confirm(`Delete ${scenario.name}?`)) return;
+      await refresh({ type: "DELETE_SCENARIO", scenarioId: scenario.id });
+    };
+    const addRule = () =>
+      updateDraft((scenario) =>
+        scenario.builtIn
+          ? scenario
+          : { ...scenario, rules: [...scenario.rules, createCustomRule(scenario.rules.length + 1)] },
+      );
+    const removeRule = (ruleIndex: number) =>
+      updateDraft((scenario) =>
+        scenario.builtIn || scenario.rules.length === 1
+          ? scenario
+          : { ...scenario, rules: scenario.rules.filter((_, index) => index !== ruleIndex) },
+      );
   const operationOptions = draft
     ? [
         ...new Set([
@@ -223,10 +378,70 @@ function App() {
             : "Fault injection disabled"}
       </div>
       {error && <div className="error">{error}</div>}
-      <small>QUICK CHAOS</small>
+      <section className="recorder-panel">
+        <div className="section-heading">
+          <small>RECORDER</small>
+          <span className={state.recorder.active ? "recording-dot" : "field-hint"}>
+            {state.recorder.active ? "Recording" : `${state.recorder.requests.length} observed`}
+          </span>
+        </div>
+        <div className="recorder-actions">
+          {state.recorder.active ? (
+            <button className="primary" type="button" onClick={() => void stopRecording()}>
+              Stop recording
+            </button>
+          ) : (
+            <button className="secondary" disabled={loading} type="button" onClick={() => void startRecording()}>
+              Start recording
+            </button>
+          )}
+          <button className="secondary" disabled={loading || state.recorder.requests.length === 0} type="button" onClick={() => void clearRecording()}>
+            Clear
+          </button>
+        </div>
+        {state.recorder.requests.length > 0 && (
+          <>
+            <div className="recorded-list">
+              {state.recorder.requests.slice(-25).map((request: RecordedRequest) => (
+                <label className="recorded-request" key={request.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedRecordings.has(request.id)}
+                    onChange={() => toggleRecordingSelection(request.id)}
+                  />
+                  <span>
+                    <b>{request.method} {request.url}</b>
+                    <em>{[request.resourceType, request.graphqlOperationName].filter(Boolean).join(" · ") || "request"}</em>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <button className="secondary create-recorded" disabled={loading || selectedRecordings.size === 0} type="button" onClick={() => void createFromRecording()}>
+              Create scenario from selected
+            </button>
+          </>
+        )}
+        {state.recorder.events.length > 0 && (
+          <div className="recorded-events">
+            <span className="field-hint">Journey timeline</span>
+            {state.recorder.events.slice(-20).map((event) => (
+              <div className="recorded-event" key={event.id}>
+                <time>{new Date(event.timestamp).toLocaleTimeString()}</time>
+                <span>{describeRecordedEvent(event)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <div className="section-heading">
+        <small>QUICK CHAOS</small>
+        <button className="secondary add-scenario" disabled={loading} onClick={openNewEditor}>
+          + New scenario
+        </button>
+      </div>
       <section>
         {state.scenarios.map((s) => (
-          <article className="scenario-row" key={s.id}>
+          <article className={s.builtIn ? "scenario-row" : "scenario-row custom-row"} key={s.id}>
             <button
               className={
                 state.activeScenarioId === s.id ? "scenario active" : "scenario"
@@ -258,6 +473,17 @@ function App() {
             >
               ⚙
             </button>
+            {!s.builtIn && (
+              <button
+                className="configure delete-scenario"
+                disabled={loading}
+                title={`Delete ${s.name}`}
+                aria-label={`Delete ${s.name}`}
+                onClick={() => void deleteScenario(s)}
+              >
+                ×
+              </button>
+            )}
           </article>
         ))}
       </section>
@@ -288,6 +514,9 @@ function App() {
                 ×
               </button>
             </header>
+            {!draft.builtIn && !state.scenarios.some((scenario) => scenario.id === draft.id) && (
+              <div className="field-hint">Custom scenarios are stored only in this browser.</div>
+            )}
             <label>
               Scenario name
               <input
@@ -317,7 +546,36 @@ function App() {
             </label>
             {draft.rules.map((rule, ruleIndex) => (
               <fieldset className="rule-editor" key={rule.id}>
-                <legend>{rule.name}</legend>
+                <legend>
+                  <span>{rule.name}</span>
+                  {!draft.builtIn && (
+                    <button
+                      className="remove-rule"
+                      type="button"
+                      disabled={draft.rules.length === 1}
+                      title="Remove rule"
+                      aria-label="Remove rule"
+                      onClick={() => removeRule(ruleIndex)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </legend>
+                <label>
+                  Rule name
+                  <input
+                    value={rule.name}
+                    maxLength={50}
+                    onChange={(event) =>
+                      updateDraft((scenario) => ({
+                        ...scenario,
+                        rules: scenario.rules.map((item, index) =>
+                          index === ruleIndex ? { ...item, name: event.target.value } : item,
+                        ),
+                      }))
+                    }
+                  />
+                </label>
                 <label className="check-line">
                   <input
                     type="checkbox"
@@ -334,6 +592,28 @@ function App() {
                     }
                   />
                   Rule enabled
+                </label>
+                <label>
+                  Failure action
+                  <select
+                    value={rule.action.type}
+                    onChange={(event) =>
+                      updateDraft((scenario) => ({
+                        ...scenario,
+                        rules: scenario.rules.map((item, index) =>
+                          index === ruleIndex
+                            ? { ...item, action: createAction(event.target.value as RuleAction["type"]) }
+                            : item,
+                        ),
+                      }))
+                    }
+                  >
+                    {ACTION_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   Request endpoint
@@ -436,6 +716,65 @@ function App() {
                     }
                   />
                 </label>
+                {rule.action.type !== "throttle" && (
+                  <>
+                    <label className="check-line">
+                      <input
+                        type="checkbox"
+                        checked={rule.maxApplications !== undefined}
+                        onChange={(event) =>
+                          updateDraft((scenario) => ({
+                            ...scenario,
+                            rules: scenario.rules.map((item, index) =>
+                              index === ruleIndex
+                                ? {
+                                    ...item,
+                                    maxApplications: event.target.checked
+                                      ? item.maxApplications ?? 1
+                                      : undefined,
+                                  }
+                                : item,
+                            ),
+                          }))
+                        }
+                      />
+                      Limit applications per activation
+                    </label>
+                    {rule.maxApplications !== undefined && (
+                      <label>
+                        Maximum applications
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          step="1"
+                          value={rule.maxApplications}
+                          onChange={(event) =>
+                            updateDraft((scenario) => ({
+                              ...scenario,
+                              rules: scenario.rules.map((item, index) =>
+                                index === ruleIndex
+                                  ? {
+                                      ...item,
+                                      maxApplications: Number(event.target.value),
+                                    }
+                                  : item,
+                              ),
+                            }))
+                          }
+                        />
+                        <span className="field-hint">
+                          Resets when this scenario is activated.
+                        </span>
+                      </label>
+                    )}
+                  </>
+                )}
+                {rule.action.type === "throttle" && (
+                  <span className="field-hint">
+                    Throttle is a tab-level setting and has no per-request application limit.
+                  </span>
+                )}
                 {rule.action.type === "error" && (
                   <label>
                     HTTP status
@@ -663,6 +1002,11 @@ function App() {
                 )}
               </fieldset>
             ))}
+            {!draft.builtIn && (
+              <button className="secondary add-rule" type="button" onClick={addRule}>
+                + Add rule
+              </button>
+            )}
             <div className="editor-actions">
               <button className="secondary" type="button" onClick={() => void resetDraft()}>
                 Reset defaults

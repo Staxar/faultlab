@@ -24,10 +24,56 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
     return typeof candidate.enabled === "boolean";
   }
   if (candidate.type === "UPDATE_SCENARIO") {
-    return typeof candidate.scenario === "object" && candidate.scenario !== null;
+    return (
+      typeof candidate.scenario === "object" && candidate.scenario !== null
+    );
   }
   if (candidate.type === "RESET_SCENARIO") {
     return typeof candidate.scenarioId === "string";
+  }
+  if (candidate.type === "DELETE_SCENARIO") {
+    return typeof candidate.scenarioId === "string";
+  }
+  if (candidate.type === "CREATE_SCENARIO") {
+    return (
+      typeof candidate.scenario === "object" && candidate.scenario !== null
+    );
+  }
+  if (
+    candidate.type === "START_RECORDING" ||
+    candidate.type === "STOP_RECORDING" ||
+    candidate.type === "CLEAR_RECORDING"
+  ) {
+    return true;
+  }
+  if (candidate.type === "CREATE_SCENARIO_FROM_RECORDING") {
+    const recordingCandidate = candidate as {
+      name?: unknown;
+      requestIds?: unknown;
+    };
+    return (
+      typeof recordingCandidate.name === "string" &&
+      Array.isArray(recordingCandidate.requestIds) &&
+      recordingCandidate.requestIds.every((id) => typeof id === "string")
+    );
+  }
+  if (candidate.type === "RECORD_EVENT") {
+    const eventCandidate = candidate as { event?: Record<string, unknown> };
+    const event = eventCandidate.event;
+    if (
+      !event ||
+      typeof event.id !== "string" ||
+      typeof event.timestamp !== "number" ||
+      !Number.isFinite(event.timestamp)
+    ) {
+      return false;
+    }
+    if (event.type === "navigation") return typeof event.url === "string";
+    return (
+      event.type === "interaction" &&
+      (event.action === "click" || event.action === "change") &&
+      typeof event.target === "string"
+    );
   }
   return (
     candidate.type === "ACTIVATE_SCENARIO" &&
