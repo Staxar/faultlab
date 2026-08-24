@@ -15,9 +15,9 @@ Every configurable rule should expose:
 - probability from 0% to 100% for per-request actions;
 - an optional maximum number of applications, reset when the scenario is activated.
 
-An empty matcher means all requests visible to the adapter. The UI should show a warning before activating a rule with an empty matcher. MVP 0.3 uses literal, case-sensitive URL matching and a GraphQL operation name extracted from `operationName` or a named `query`, `mutation`, or `subscription` definition. Response fields are discovered as JSON Pointer paths; array elements are represented with `*`, for example `/items/*/id`. Regex, headers, request bodies, and response statuses are deferred.
+An empty matcher means all requests visible to the adapter. The UI asks for confirmation before activating a scenario with an enabled empty matcher. MVP 0.3 uses literal, case-sensitive URL matching and a GraphQL operation name extracted from `operationName` or a named `query`, `mutation`, or `subscription` definition. Response fields are discovered as JSON Pointer paths; array elements are represented with `*`, for example `/items/*/id`. Regex, headers, request bodies, and response statuses are deferred.
 
-When multiple rules match one request, the first matching rule in scenario order wins for request-stage actions. A `throttle` rule is different: it configures the selected tab globally and there may be at most one active throttle rule in a scenario. Requests that match no rule continue unchanged.
+When multiple rules match one request, the first matching rule in scenario order wins for request-stage actions. A per-request rule with an application limit stops matching after its limit is reached; the count resets when the scenario is applied again. A `throttle` rule is different: it configures the selected tab globally and has no per-request application limit. Requests that match no rule continue unchanged.
 
 ## Backend Down
 
@@ -97,4 +97,4 @@ These examples are useful acceptance scenarios for the builder, but are not buil
 
 ## Configuration Safety
 
-Every setting needs a default and bounded validation. A scenario cannot be saved without at least one valid rule. Resetting a built-in preset restores its safe defaults. Configuration remains local to the extension and applies to the selected tab; application limits, broad-matcher confirmation, multi-tab coordination, and sharing are later work.
+Every setting needs a default and bounded validation. A scenario cannot be saved without at least one valid rule. Resetting a built-in preset restores its safe defaults. Per-request application limits are bounded from 1 to 1000 and reset when the scenario is applied again. Configuration remains local to the extension and applies to the selected tab; multi-tab coordination and sharing are later work.
