@@ -52,13 +52,30 @@ export interface RecordedRequest {
   graphqlOperationName?: string;
 }
 
+export type RecordedEvent =
+  | {
+      id: string;
+      timestamp: number;
+      type: "navigation";
+      url: string;
+    }
+  | {
+      id: string;
+      timestamp: number;
+      type: "interaction";
+      action: "click" | "change";
+      target: string;
+    };
+
 export interface RuntimeState {
   enabled: boolean;
   activeScenarioId: string | null;
   scenarios: Scenario[];
   recorder: {
     active: boolean;
+    tabId: number | null;
     requests: RecordedRequest[];
+    events: RecordedEvent[];
   };
 }
 
@@ -89,7 +106,8 @@ export type RuntimeMessage =
       type: "CREATE_SCENARIO_FROM_RECORDING";
       name: string;
       requestIds: string[];
-    };
+    }
+  | { type: "RECORD_EVENT"; event: RecordedEvent };
 
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";

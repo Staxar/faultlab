@@ -9,5 +9,5 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react(), { name: "copy-manifest", closeBundle() { cpSync(resolve(rootDir,"manifest.json"), resolve(rootDir,"dist/manifest.json")); } }],
   resolve: { alias: { "@faultlab/core": resolve(rootDir,"../../packages/core/src") } },
-  build: { outDir:"dist", emptyOutDir:true, rollupOptions:{ input:{ sidepanel:resolve(rootDir,"sidepanel.html"), background:resolve(rootDir,"src/background.ts") }, output:{ entryFileNames:c=>c.name==="background"?"background.js":"assets/[name]-[hash].js", chunkFileNames:"assets/[name]-[hash].js", assetFileNames:"assets/[name]-[hash][extname]" } } }
+  build: { outDir:"dist", emptyOutDir:true, rollupOptions:{ input:{ sidepanel:resolve(rootDir,"sidepanel.html"), background:resolve(rootDir,"src/background.ts"), content:resolve(rootDir,"src/content/main.ts") }, output:{ entryFileNames:c=>c.name==="background"?"background.js":c.name==="content"?"content.js":"assets/[name]-[hash].js", chunkFileNames:"assets/[name]-[hash].js", assetFileNames:"assets/[name]-[hash][extname]" } } }
 });

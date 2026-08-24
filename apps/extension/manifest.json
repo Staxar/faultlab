@@ -11,6 +11,13 @@
   },
   "minimum_chrome_version": "114",
   "permissions": ["debugger", "storage", "sidePanel", "tabs"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
   "action": {
     "default_title": "Open FaultLab side panel",
     "default_icon": {

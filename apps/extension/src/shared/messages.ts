@@ -57,6 +57,24 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
       recordingCandidate.requestIds.every((id) => typeof id === "string")
     );
   }
+  if (candidate.type === "RECORD_EVENT") {
+    const eventCandidate = candidate as { event?: Record<string, unknown> };
+    const event = eventCandidate.event;
+    if (
+      !event ||
+      typeof event.id !== "string" ||
+      typeof event.timestamp !== "number" ||
+      !Number.isFinite(event.timestamp)
+    ) {
+      return false;
+    }
+    if (event.type === "navigation") return typeof event.url === "string";
+    return (
+      event.type === "interaction" &&
+      (event.action === "click" || event.action === "change") &&
+      typeof event.target === "string"
+    );
+  }
   return (
     candidate.type === "ACTIVATE_SCENARIO" &&
     typeof candidate.scenarioId === "string"

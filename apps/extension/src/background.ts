@@ -2,6 +2,7 @@ import {
   defaultScenarios,
   createScenarioFromRecordedRequests,
   validateScenario,
+  type RecordedEvent,
   type RecordedRequest,
   type RuntimeMessage,
   type RuntimeState,
@@ -22,16 +23,31 @@ async function getState(): Promise<RuntimeState> {
       ...scenario,
       builtIn: scenario.builtIn ?? defaultIds.has(scenario.id),
     }));
-    const storedRecorder = storedState.recorder ?? {
-      active: false,
-      requests: [] as RecordedRequest[],
+    const storedRecorder = storedState.recorder ?? {};
+    const storedTabId =
+      typeof storedRecorder.tabId === "number" ? storedRecorder.tabId : null;
+    const normalizedRecorder = {
+      active: storedRecorder.active === true && storedTabId !== null,
+      tabId: storedTabId,
+      requests: Array.isArray(storedRecorder.requests)
+        ? storedRecorder.requests
+        : [],
+      events: Array.isArray(storedRecorder.events)
+        ? storedRecorder.events
+        : [],
     };
-    const recorderWasStored = storedState.recorder !== undefined;
-    networkAdapter.restoreRecordedRequests(storedRecorder.requests);
+    networkAdapter.restoreRecordedRequests(
+      normalizedRecorder.requests,
+      normalizedRecorder.events,
+    );
     const liveRequests = networkAdapter.getRecordedRequests();
-    const recorder = storedRecorder.active
-      ? { ...storedRecorder, requests: liveRequests }
-      : storedRecorder;
+    const recorder = normalizedRecorder.active
+      ? {
+          ...normalizedRecorder,
+          requests: liveRequests,
+          events: networkAdapter.getRecordedEvents(),
+        }
+      : normalizedRecorder;
     const knownIds = new Set(
       storedState.scenarios.map((scenario) => scenario.id),
     );
@@ -40,7 +56,7 @@ async function getState(): Promise<RuntimeState> {
     );
     if (
       missingDefaults.length === 0 &&
-      recorderWasStored &&
+      storedState.recorder !== undefined &&
       migratedScenarios.every(
         (scenario, index) =>
           scenario.builtIn === storedState.scenarios[index].builtIn,
@@ -59,7 +75,7 @@ async function getState(): Promise<RuntimeState> {
     enabled: false,
     activeScenarioId: null,
     scenarios: defaultScenarios,
-    recorder: { active: false, requests: [] },
+    recorder: { active: false, tabId: null, requests: [], events: [] },
   };
   await chrome.storage.local.set({ [KEY]: state });
   return state;
@@ -75,6 +91,7 @@ async function syncNetwork(state: RuntimeState, tabId?: number): Promise<void> {
   }
 
   const activeTabId =
+    (state.recorder.active ? state.recorder.tabId : null) ??
     tabId ??
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (activeTabId == null) {
@@ -115,7 +132,7 @@ chrome.runtime.onSuspend.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener(
-  (message: unknown, _sender, sendResponse) => {
+  (message: unknown, sender, sendResponse) => {
     if (!isRuntimeMessage(message)) {
       sendResponse({ ok: false, error: "Invalid message" });
       return false;
@@ -128,26 +145,29 @@ chrome.runtime.onMessage.addListener(
       if (typedMessage.type === "GET_DISCOVERED_DATA") {
         return { ok: true, discovered: networkAdapter.getDiscoveredData() };
       }
-      if (typedMessage.type === "SET_ENABLED") {
-        const next = { ...state, enabled: typedMessage.enabled };
-        await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
-        return { ok: true, state: next };
-      }
-      if (typedMessage.type === "ACTIVATE_SCENARIO") {
-        if (!state.scenarios.some((s) => s.id === typedMessage.scenarioId))
-          return { ok: false, error: "Unknown scenario" };
+      if (typedMessage.type === "RECORD_EVENT") {
+        if (!state.recorder.active || sender.tab?.id == null) {
+          return { ok: false, error: "Recorder is not active" };
+        }
+        if (!networkAdapter.recordEvent(sender.tab.id, typedMessage.event)) {
+          return { ok: false, error: "Event came from a different tab" };
+        }
         const next = {
           ...state,
-          enabled: true,
-          activeScenarioId: typedMessage.scenarioId,
+          recorder: {
+            ...state.recorder,
+            requests: networkAdapter.getRecordedRequests(),
+            events: networkAdapter.getRecordedEvents(),
+          },
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
         return { ok: true, state: next };
       }
-      if (typedMessage.type === "DEACTIVATE_SCENARIO") {
-        const next = { ...state, activeScenarioId: null };
+      if (typedMessage.type === "SET_ENABLED") {
+        if (typedMessage.enabled && state.recorder.active) {
+          return { ok: false, error: "Stop recording before enabling chaos" };
+        }
+        const next = { ...state, enabled: typedMessage.enabled };
         await chrome.storage.local.set({ [KEY]: next });
         await syncNetwork(next);
         return { ok: true, state: next };
@@ -173,6 +193,9 @@ chrome.runtime.onMessage.addListener(
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
+          if (state.recorder.active) {
+            return { ok: false, error: "Stop recording before activating a scenario" };
+          }
         await syncNetwork(next);
         return { ok: true, state: next };
       }
@@ -235,15 +258,39 @@ chrome.runtime.onMessage.addListener(
         return { ok: true, state: next };
       }
       if (typedMessage.type === "START_RECORDING") {
+        const activeTabId =
+          (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+        if (activeTabId == null) {
+          return { ok: false, error: "No active tab to record" };
+        }
         networkAdapter.clearRecordedRequests();
         const next = {
           ...state,
           enabled: false,
           activeScenarioId: null,
-          recorder: { active: true, requests: [] },
+          recorder: { active: true, tabId: activeTabId, requests: [], events: [] },
         };
         await chrome.storage.local.set({ [KEY]: next });
         await syncNetwork(next);
+        const activeTab = await chrome.tabs.get(activeTabId);
+        if (activeTab.url?.startsWith("http")) {
+          networkAdapter.recordEvent(activeTabId, {
+            id: `event-${crypto.randomUUID()}`,
+            timestamp: Date.now(),
+            type: "navigation",
+            url: activeTab.url,
+          });
+          const recorded = {
+            ...next,
+            recorder: {
+              ...next.recorder,
+              requests: networkAdapter.getRecordedRequests(),
+              events: networkAdapter.getRecordedEvents(),
+            },
+          };
+          await chrome.storage.local.set({ [KEY]: recorded });
+          return { ok: true, state: recorded };
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "STOP_RECORDING") {
@@ -251,7 +298,9 @@ chrome.runtime.onMessage.addListener(
           ...state,
           recorder: {
             active: false,
+            tabId: state.recorder.tabId,
             requests: networkAdapter.getRecordedRequests(),
+            events: networkAdapter.getRecordedEvents(),
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -260,7 +309,10 @@ chrome.runtime.onMessage.addListener(
       }
       if (typedMessage.type === "CLEAR_RECORDING") {
         networkAdapter.clearRecordedRequests();
-        const next = { ...state, recorder: { ...state.recorder, requests: [] } };
+        const next = {
+          ...state,
+          recorder: { ...state.recorder, requests: [], events: [] },
+        };
         await chrome.storage.local.set({ [KEY]: next });
         return { ok: true, state: next };
       }

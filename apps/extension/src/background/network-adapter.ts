@@ -5,11 +5,13 @@ import {
   matchesRule,
   shouldApply,
   type FaultRule,
+  type RecordedEvent,
   type RecordedRequest,
 } from "@faultlab/core";
 
 const MAX_MUTATION_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_RECORDED_REQUESTS = 500;
+const MAX_RECORDED_EVENTS = 500;
 
 type ResponseHeader = { name: string; value: string };
 
@@ -38,6 +40,7 @@ export class ChromeNetworkAdapter {
   private recording = false;
   private recordedRequests: RecordedRequest[] = [];
   private recordedRequestIds = new Set<string>();
+  private recordedEvents: RecordedEvent[] = [];
   private restoredRecordedRequests = false;
 
   constructor() {
@@ -87,18 +90,36 @@ export class ChromeNetworkAdapter {
     return [...this.recordedRequests];
   }
 
+  getRecordedEvents(): RecordedEvent[] {
+    return [...this.recordedEvents];
+  }
+
   clearRecordedRequests(): void {
     this.recordedRequests = [];
     this.recordedRequestIds.clear();
+    this.recordedEvents = [];
   }
 
-  restoreRecordedRequests(requests: RecordedRequest[]): void {
+  restoreRecordedRequests(
+    requests: RecordedRequest[],
+    events: RecordedEvent[] = [],
+  ): void {
     if (this.restoredRecordedRequests) return;
     this.restoredRecordedRequests = true;
     this.recordedRequests = requests.slice(-MAX_RECORDED_REQUESTS);
     this.recordedRequestIds = new Set(
       this.recordedRequests.map((request) => request.id),
     );
+    this.recordedEvents = events.slice(-MAX_RECORDED_EVENTS);
+  }
+
+  recordEvent(tabId: number, event: RecordedEvent): boolean {
+    if (!this.recording || this.attachedTabId !== tabId) return false;
+    this.recordedEvents.push(event);
+    if (this.recordedEvents.length > MAX_RECORDED_EVENTS) {
+      this.recordedEvents.shift();
+    }
+    return true;
   }
 
   getDiscoveredData(): {
