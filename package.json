@@ -1,0 +1,14 @@
+{
+  "name": "faultlab",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @faultlab/extension dev",
+    "build": "pnpm --filter @faultlab/extension build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
