@@ -24,7 +24,9 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
     return typeof candidate.enabled === "boolean";
   }
   if (candidate.type === "UPDATE_SCENARIO") {
-    return typeof candidate.scenario === "object" && candidate.scenario !== null;
+    return (
+      typeof candidate.scenario === "object" && candidate.scenario !== null
+    );
   }
   if (candidate.type === "RESET_SCENARIO") {
     return typeof candidate.scenarioId === "string";
@@ -33,7 +35,9 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
     return typeof candidate.scenarioId === "string";
   }
   if (candidate.type === "CREATE_SCENARIO") {
-    return typeof candidate.scenario === "object" && candidate.scenario !== null;
+    return (
+      typeof candidate.scenario === "object" && candidate.scenario !== null
+    );
   }
   return (
     candidate.type === "ACTIVATE_SCENARIO" &&
