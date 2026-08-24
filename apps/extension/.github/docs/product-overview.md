@@ -62,4 +62,4 @@ Combines multiple chaos sources.
 
 ## Recorder
 
-The first recorder slice observes network requests locally while the user browses the selected tab. Users can select observed requests and create a custom scenario containing delay rules for those endpoints. Interaction events, navigation milestones, and richer action inference remain future work.
+The first recorder slice observes network requests, navigation, clicks, and form changes locally while the user browses the selected tab. Users can review the journey timeline, select observed requests, and create a custom scenario containing delay rules for those endpoints. Richer action inference remains future work.

@@ -50,7 +50,7 @@ The recorder is a compact workflow in the Side Panel:
 5. create a custom scenario from the selection;
 6. configure or activate the generated scenario.
 
-Recording must be visibly active, keep request URLs truncated in the list, and make the local-only behavior clear. Starting a recording disables an active chaos scenario so the observations represent normal application traffic. The initial generated action is an 800 ms request delay and remains editable.
+Recording must be visibly active, keep request URLs and selectors truncated in the list, and make the local-only behavior clear. Starting a recording disables an active chaos scenario so the observations represent normal application traffic. The timeline shows navigation, click, and form-change milestones without storing field values. The initial generated action is an 800 ms request delay and remains editable.
 
 ## Local-First Behavior
 

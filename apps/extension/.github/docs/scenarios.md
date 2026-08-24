@@ -78,7 +78,7 @@ Custom scenarios can be created from the Side Panel with one or more rules. Each
 
 ## Recorded Scenarios
 
-The recorder stores up to 500 unique network observations for the selected tab. A user can select observed requests and create a custom scenario. Each unique endpoint, method, resource type, and GraphQL operation becomes a delay rule with an 800 ms default delay. The generated scenario is local and editable; recording does not capture request bodies or send observations to a server.
+The recorder stores up to 500 unique network observations and 500 journey events for the selected tab. Journey events include navigation, clicks, and form changes; field values are not stored. A user can select observed requests and create a custom scenario. Each unique endpoint, method, resource type, and GraphQL operation becomes a delay rule with an 800 ms default delay. The generated scenario is local and editable; recording does not capture request bodies or send observations to a server.
 
 ## Future Examples
 

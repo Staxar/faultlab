@@ -4,6 +4,7 @@ import type {
   JsonMutation,
   RequestMatcher,
   RuleAction,
+  RecordedEvent,
   RecordedRequest,
   RuntimeMessage,
   RuntimeState,
@@ -15,7 +16,7 @@ const empty: RuntimeState = {
   enabled: false,
   activeScenarioId: null,
   scenarios: [],
-  recorder: { active: false, requests: [] },
+  recorder: { active: false, tabId: null, requests: [], events: [] },
 };
 type RuntimeResponse = {
   ok: boolean;
@@ -102,6 +103,11 @@ function hasBroadMatcher(scenario: Scenario): boolean {
       matcher.graphqlOperationName
     );
   });
+}
+
+function describeRecordedEvent(event: RecordedEvent): string {
+  if (event.type === "navigation") return `Navigated to ${event.url}`;
+  return `${event.action === "click" ? "Clicked" : "Changed"} ${event.target}`;
 }
 
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
@@ -414,6 +420,17 @@ function App() {
               Create scenario from selected
             </button>
           </>
+        )}
+        {state.recorder.events.length > 0 && (
+          <div className="recorded-events">
+            <span className="field-hint">Journey timeline</span>
+            {state.recorder.events.slice(-20).map((event) => (
+              <div className="recorded-event" key={event.id}>
+                <time>{new Date(event.timestamp).toLocaleTimeString()}</time>
+                <span>{describeRecordedEvent(event)}</span>
+              </div>
+            ))}
+          </div>
         )}
       </section>
       <div className="section-heading">

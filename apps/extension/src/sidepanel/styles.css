@@ -154,6 +154,29 @@ h1 {
   width: 100%;
   margin-top: 9px;
 }
+.recorded-events {
+  display: grid;
+  gap: 6px;
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid #272930;
+}
+.recorded-event {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 7px;
+  color: #c8cad1;
+  font-size: 10px;
+}
+.recorded-event time {
+  color: #858894;
+  font-variant-numeric: tabular-nums;
+}
+.recorded-event span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 section {
   display: grid;
   gap: 7px;
