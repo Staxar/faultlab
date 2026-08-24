@@ -6,6 +6,7 @@ import {
   shouldApply,
   type FaultRule,
   type DetectedIssue,
+  type FaultInjection,
   type RecordedEvent,
   type RecordedRequest,
 } from "@faultlab/core";
@@ -28,6 +29,7 @@ type RequestPausedEvent = {
   responseStatusCode?: number;
   responsePhrase?: string;
   responseHeaders?: ResponseHeader[];
+  networkId?: string;
 };
 
 export class ChromeNetworkAdapter {
@@ -47,6 +49,8 @@ export class ChromeNetworkAdapter {
   private monitoring = false;
   private detectedIssues: DetectedIssue[] = [];
   private restoredDetectedIssues = false;
+  private faultInjections: FaultInjection[] = [];
+  private scenarioId: string | undefined;
 
   constructor() {
     chrome.debugger.onEvent.addListener((source, method, params) => {
@@ -77,9 +81,10 @@ export class ChromeNetworkAdapter {
     rules: FaultRule[],
     recording = false,
     monitoring = false,
+    scenarioId?: string,
   ): Promise<void> {
     const operation = this.operation.then(() =>
-      this.applyRulesNow(tabId, rules, recording, monitoring),
+      this.applyRulesNow(tabId, rules, recording, monitoring, scenarioId),
     );
     this.operation = operation.then(
       () => undefined,
@@ -113,6 +118,10 @@ export class ChromeNetworkAdapter {
     return [...this.detectedIssues];
   }
 
+  getFaultInjections(): FaultInjection[] {
+    return [...this.faultInjections];
+  }
+
   clearRecordedRequests(): void {
     this.recordedRequests = [];
     this.recordedRequestIds.clear();
@@ -121,12 +130,17 @@ export class ChromeNetworkAdapter {
 
   clearDetectedIssues(): void {
     this.detectedIssues = [];
+    this.faultInjections = [];
   }
 
-  restoreDetectedIssues(issues: DetectedIssue[]): void {
+  restoreDetectedIssues(
+    issues: DetectedIssue[],
+    injections: FaultInjection[] = [],
+  ): void {
     if (this.restoredDetectedIssues) return;
     this.restoredDetectedIssues = true;
     this.detectedIssues = issues.slice(-MAX_DETECTED_ISSUES);
+    this.faultInjections = injections.slice(-MAX_DETECTED_ISSUES);
   }
 
   restoreRecordedRequests(
@@ -156,7 +170,18 @@ export class ChromeNetworkAdapter {
     issue: Omit<DetectedIssue, "tabId">,
   ): boolean {
     if (!this.monitoring || this.attachedTabId !== tabId) return false;
-    this.detectedIssues.push({ ...issue, tabId });
+    this.detectedIssues.push(
+      this.withCorrelation({
+        id: issue.id,
+        timestamp: issue.timestamp,
+        tabId,
+        type: issue.type,
+        message: issue.message,
+        ...(issue.source === undefined ? {} : { source: issue.source }),
+        ...(issue.url === undefined ? {} : { url: issue.url }),
+        ...(issue.status === undefined ? {} : { status: issue.status }),
+      }),
+    );
     if (this.detectedIssues.length > MAX_DETECTED_ISSUES) {
       this.detectedIssues.shift();
     }
@@ -187,6 +212,7 @@ export class ChromeNetworkAdapter {
     rules: FaultRule[],
     recording: boolean,
     monitoring: boolean,
+    scenarioId?: string,
   ): Promise<void> {
     if (this.attachedTabId !== tabId) {
       await this.stopNow();
@@ -234,6 +260,7 @@ export class ChromeNetworkAdapter {
       this.applicationCounts.clear();
       this.recording = recording;
       this.monitoring = monitoring;
+      this.scenarioId = scenarioId;
       if (monitoring) {
         await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
         await chrome.debugger.sendCommand({ tabId }, "Network.enable");
@@ -250,6 +277,7 @@ export class ChromeNetworkAdapter {
     this.rules = [];
     this.recording = false;
     this.monitoring = false;
+    this.scenarioId = undefined;
     this.applicationCounts.clear();
     this.clearPendingTimeouts();
     if (this.attachedTabId == null) return;
@@ -331,7 +359,6 @@ export class ChromeNetworkAdapter {
       }
 
       if (rule.action.type === "error") {
-        this.recordApplication(rule);
         await chrome.debugger.sendCommand({ tabId }, "Fetch.fulfillRequest", {
           requestId: event.requestId,
           responseCode: rule.action.status,
@@ -340,15 +367,18 @@ export class ChromeNetworkAdapter {
           ],
           body: btoa(JSON.stringify({ error: "Fault injected by FaultLab" })),
         });
+        this.recordApplication(rule);
+        this.recordFaultInjection(tabId, event, rule, rule.action.status);
         return;
       }
 
       if (rule.action.type === "offline") {
-        this.recordApplication(rule);
         await chrome.debugger.sendCommand({ tabId }, "Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "InternetDisconnected",
         });
+        this.recordApplication(rule);
+        this.recordFaultInjection(tabId, event, rule);
         return;
       }
 
@@ -384,6 +414,7 @@ export class ChromeNetworkAdapter {
         Math.max(0, rule.action.delayMs),
       );
       this.recordApplication(rule);
+      this.recordFaultInjection(tabId, event, rule);
       this.pendingTimeouts.add(timeout);
     } catch (error) {
       console.warn("FaultLab could not handle intercepted request", error);
@@ -468,6 +499,7 @@ export class ChromeNetworkAdapter {
         body: encodeBase64Utf8(mutatedBody),
       });
       this.recordApplication(rule);
+      this.recordFaultInjection(tabId, event, rule);
     } catch (error) {
       console.warn("FaultLab could not fulfill the mutated response", error);
       await continueResponse();
@@ -561,14 +593,75 @@ export class ChromeNetworkAdapter {
     issue: Omit<DetectedIssue, "id" | "timestamp" | "tabId">,
   ): void {
     if (!this.monitoring || this.attachedTabId !== tabId) return;
-    this.detectedIssues.push({
+    this.detectedIssues.push(this.withCorrelation({
       ...issue,
       id: `issue-${crypto.randomUUID()}`,
       timestamp: Date.now(),
       tabId,
-    });
+    }));
     if (this.detectedIssues.length > MAX_DETECTED_ISSUES) {
       this.detectedIssues.shift();
+    }
+  }
+
+  private recordFaultInjection(
+    tabId: number,
+    event: RequestPausedEvent,
+    rule: FaultRule,
+    status?: number,
+  ): void {
+    if (!this.monitoring) return;
+    this.faultInjections.push({
+      id: `injection-${crypto.randomUUID()}`,
+      timestamp: Date.now(),
+      tabId,
+      requestId: event.networkId ?? event.requestId,
+      url: event.request.url,
+      method: event.request.method.toUpperCase(),
+      scenarioId: this.scenarioId,
+      ruleId: rule.id,
+      action: rule.action.type,
+      ...(status === undefined ? {} : { status }),
+    });
+    if (this.faultInjections.length > MAX_DETECTED_ISSUES) {
+      this.faultInjections.shift();
+    }
+  }
+
+  private withCorrelation(issue: DetectedIssue): DetectedIssue {
+    const explicit = issue.requestId
+      ? this.faultInjections.find(
+          (injection) => injection.requestId === issue.requestId,
+        )
+      : undefined;
+    const issueOrigin = issue.url ? this.originOf(issue.url) : undefined;
+    const related =
+      explicit ??
+      [...this.faultInjections]
+        .reverse()
+        .find((injection) => {
+          const withinWindow =
+            Math.abs(injection.timestamp - issue.timestamp) <= 10000;
+          const sameOrigin =
+            issueOrigin === undefined ||
+            this.originOf(injection.url) === issueOrigin;
+          return withinWindow && sameOrigin;
+        });
+    if (!related) return issue;
+    return {
+      ...issue,
+      injectionId: related.id,
+      scenarioId: related.scenarioId,
+      ruleId: related.ruleId,
+      requestId: issue.requestId ?? related.requestId,
+    };
+  }
+
+  private originOf(value: string): string | undefined {
+    try {
+      return new URL(value).origin;
+    } catch {
+      return undefined;
     }
   }
 

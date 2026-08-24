@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { groupDetectedIssues } from "@faultlab/core";
 import type {
   JsonMutation,
   RequestMatcher,
@@ -18,7 +19,7 @@ const empty: RuntimeState = {
   activeScenarioId: null,
   scenarios: [],
   recorder: { active: false, tabId: null, requests: [], events: [] },
-  errorMonitor: { active: false, tabId: null, issues: [] },
+  errorMonitor: { active: false, tabId: null, issues: [], injections: [] },
 };
 type RuntimeResponse = {
   ok: boolean;
@@ -119,6 +120,10 @@ function issueLabel(issue: DetectedIssue): string {
   return "Network failure";
 }
 
+function issueTypeLabel(type: DetectedIssue["type"]): string {
+  return issueLabel({ type } as DetectedIssue);
+}
+
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
   chrome.runtime.sendMessage(message);
 function App() {
@@ -134,6 +139,7 @@ function App() {
     graphqlOperations: [],
     jsonPaths: [],
   });
+  const findings = groupDetectedIssues(state.errorMonitor.issues);
   useEffect(() => {
     let mounted = true;
     void send({ type: "GET_STATE" })
@@ -480,7 +486,7 @@ function App() {
           <span className={state.errorMonitor.active ? "recording-dot" : "field-hint"}>
             {state.errorMonitor.active
               ? "Monitoring"
-              : `${state.errorMonitor.issues.length} found`}
+              : `${findings.length} findings`}
           </span>
         </div>
         <div className="recorder-actions">
@@ -500,18 +506,35 @@ function App() {
         <span className="field-hint issue-hint">
           Console, runtime, Promise, and network failures stay local to this browser.
         </span>
-        {state.errorMonitor.issues.length > 0 && (
+        {findings.length > 0 && (
           <div className="issues-list">
-            {state.errorMonitor.issues.slice(-30).reverse().map((issue) => (
-              <div className="issue-row" key={issue.id}>
+            {findings.slice(0, 30).map((finding) => {
+              const injection = finding.injectionId
+                ? state.errorMonitor.injections.find(
+                    (item) => item.id === finding.injectionId,
+                  )
+                : undefined;
+              const scenario = finding.scenarioId
+                ? state.scenarios.find((item) => item.id === finding.scenarioId)
+                : undefined;
+              return (
+              <div className="issue-row" key={finding.id}>
                 <div className="issue-meta">
-                  <b>{issueLabel(issue)}</b>
-                  <time>{new Date(issue.timestamp).toLocaleTimeString()}</time>
+                  <b>{issueTypeLabel(finding.type)}</b>
+                  <strong>{finding.count}x</strong>
+                  <time>{new Date(finding.lastSeen).toLocaleTimeString()}</time>
                 </div>
-                <span>{issue.message}</span>
-                {issue.source && <em>{issue.source}</em>}
+                <span>{finding.message}</span>
+                {(scenario || injection || finding.source) && (
+                  <em>
+                    {[scenario?.name, injection && `${injection.method} ${injection.url}`, finding.source]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </em>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
