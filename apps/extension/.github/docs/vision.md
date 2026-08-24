@@ -25,3 +25,7 @@ The question FaultLab answers is:
 ## Long-Term Goal
 
 Become the standard chaos engineering platform for web applications.
+
+Browser Chaos, UI Chaos, Auto Chaos, reports, integrations, CLI, and team workflows are long-term vision,
+not current capabilities. The current product is the local FaultLab browser extension focused on network
+failure injection, JSON response mutation, scenario configuration, recording, and issue collection.

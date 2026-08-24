@@ -28,7 +28,11 @@
 - The Manifest V3 service worker is bundled as `background.js`; update [apps/extension/manifest.json](apps/extension/manifest.json) when permissions or extension entry points change.
 - Keep shared message contracts in [apps/extension/src/shared/messages.ts](apps/extension/src/shared/messages.ts) and Chrome debugger integration in [apps/extension/src/background/network-adapter.ts](apps/extension/src/background/network-adapter.ts).
 - Keep JSON mutation transformations in [packages/core/src/mutations.ts](packages/core/src/mutations.ts); the adapter should only handle CDP body transport and response continuation.
-- Treat `apps/extension/src/content/main.ts` and `apps/extension/src/devtools/main.ts` as reserved placeholders until their wiring is implemented.
+- `apps/extension/src/content/main.ts` is active page instrumentation for recorder events and runtime/unhandled rejection reports; keep it free of UI mutation logic.
+- `apps/extension/src/devtools/main.ts` remains a reserved placeholder until DevTools integration is deliberately implemented.
+- Scenario activation and deactivation are handled by the `ACTIVATE_SCENARIO` and `DEACTIVATE_SCENARIO` runtime messages; surface their errors in the Side Panel.
+- Recorder and error monitoring are local, bounded sessions for one selected tab. Do not silently switch either session to another tab.
+- Treat persisted `faultlab.runtime` data and incoming runtime messages as untrusted; normalize and validate them before use or persistence.
 
 ## Documentation
 

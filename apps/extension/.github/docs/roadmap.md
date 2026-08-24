@@ -18,7 +18,8 @@ The first public version is `0.1.0`. It is a release snapshot of the current wor
 
 ## MVP 0.2 - JSON Mutation
 
-Status: complete and included in `0.1.0`.
+Status: complete. The initial implementation shipped in the historical `0.1.0` snapshot; the current
+development line is `0.2.0`.
 
 Scope:
 
@@ -36,11 +37,11 @@ Implementation order:
 3. Add the `Bad Data` demonstration preset.
 4. Verify valid JSON, missing paths, non-JSON responses, large bodies, and debugger failures.
 
-Out of scope for 0.2 and the `0.1.0` release: request-body mutation, headers as matchers, response-code matchers, JSONPath, schema generation, and custom scenario CRUD.
+Out of scope: request-body mutation, headers as matchers, response-code matchers, JSONPath, and schema generation.
 
 ## MVP 0.3 - Scenario Builder
 
-Status: substantially complete; built-in editing and discovery shipped in `0.1.0`, while custom scenario CRUD is implemented in the unreleased `0.2.0` development version.
+Status: substantially complete in `0.2.0` development.
 
 The first 0.3 slice is configuration of the existing presets, followed by creation and persistence of custom scenarios. It should remain a small Side Panel workflow rather than a full rule-authoring platform.
 
@@ -67,7 +68,7 @@ Not part of 0.3: regex or wildcard matchers, headers/body matching, response mut
 
 ## MVP 0.4 - Recorder
 
-Status: first recording slice implemented in the `feature/recorder` branch.
+Status: first recording slice implemented in the current development line.
 
 - record up to 500 unique network requests locally;
 - record navigation, click, and form-change milestones locally;
@@ -79,7 +80,7 @@ Remaining recorder work: support richer generated actions and add explicit sessi
 
 ## MVP 0.5 - Error Detection
 
-Status: first local monitoring slice implemented in the `feature/error-detection` branch.
+Status: first local monitoring slice implemented in the current development line.
 
 Monitor locally:
 
@@ -91,6 +92,22 @@ Monitor locally:
 The Side Panel can start, stop, and clear monitoring for the selected tab. It keeps up to 500 issues in
 `faultlab.runtime` and displays the latest entries. Error grouping, filtering, export, and historical
 reports remain future work.
+
+## Immediate Stabilization
+
+The current stabilization branch addresses runtime correctness before adding more chaos types:
+
+- scenario activation and deactivation are handled end to end;
+- paused requests and responses have best-effort fail-open continuation;
+- persisted state and runtime messages are normalized and deeply validated;
+- recorder and monitoring sessions are bound to one selected tab;
+- focused automated checks are still needed before implementing failure correlation.
+
+## Next Product Slice - Error Observatory
+
+After stabilization, correlate an injected rule, request, and application issue into one local
+investigation. Show grouped findings in the Side Panel and add redacted JSON/Markdown export. Do not add
+server sync, AI, Jira, GitHub, or PDF export in this slice.
 
 ## MVP 1.0
 

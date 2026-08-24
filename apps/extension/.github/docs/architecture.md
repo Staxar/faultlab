@@ -2,15 +2,16 @@
 
 ## Architecture Layers
 
-UI
+Side Panel UI
 ↓
-Application Layer
+Background service worker
 ↓
-Scenario Engine
+Browser adapters and local state
 ↓
-Rule Engine
-↓
-Browser Adapters
+Chrome APIs
+
+`packages/core` supplies browser-neutral types, validation, matching, and mutation helpers. It is not a
+separate runtime service yet.
 
 ## Design Principles
 
@@ -24,27 +25,12 @@ Browser Adapters
 
 ## Runtime Flow
 
-Side Panel
+Side Panel -> runtime message -> Background Service Worker -> state validation/persistence ->
+`ChromeNetworkAdapter` -> selected tab -> Chrome Debugger Protocol.
 
-↓
-
-Background Service Worker
-
-↓
-
-Scenario Engine
-
-↓
-
-Rule Engine
-
-↓
-
-Browser Adapter
-
-↓
-
-Chrome APIs
+The content script reports recorder navigation/interactions and runtime/unhandled Promise issues back to the
+background. Recorder and error monitoring are local, bounded sessions owned by one selected tab. DevTools,
+popup, and options integration are not implemented.
 
 ## JSON Mutation Flow
 
@@ -66,4 +52,4 @@ Side Panel
 
 -> `Fetch.fulfillRequest` with the mutated response
 
-If the body is not valid JSON or cannot be read, the adapter continues the original response unchanged with `Fetch.continueResponse`.
+If the body is not valid JSON or cannot be read, the adapter continues the original response unchanged with `Fetch.continueResponse`. Unexpected request and response errors also use a best-effort continuation path; restricted pages and detached tabs remain browser limitations.

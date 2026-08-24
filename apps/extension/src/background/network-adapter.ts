@@ -387,6 +387,11 @@ export class ChromeNetworkAdapter {
       this.pendingTimeouts.add(timeout);
     } catch (error) {
       console.warn("FaultLab could not handle intercepted request", error);
+      await this.continuePausedRequest(
+        tabId,
+        event,
+        event.responseStatusCode != null,
+      );
     }
   }
 
@@ -395,11 +400,8 @@ export class ChromeNetworkAdapter {
     event: RequestPausedEvent,
     graphqlOperationName = getGraphqlOperationName(event.request.postData),
   ): Promise<void> {
-    const continueResponse = async () => {
-      await chrome.debugger.sendCommand({ tabId }, "Fetch.continueResponse", {
-        requestId: event.requestId,
-      });
-    };
+    const continueResponse = () =>
+      this.continuePausedRequest(tabId, event, true);
     const rule = this.rules.find(
       (candidate) =>
         candidate.action.type === "mutate" &&
@@ -475,6 +477,22 @@ export class ChromeNetworkAdapter {
   private clearPendingTimeouts(): void {
     for (const timeout of this.pendingTimeouts) clearTimeout(timeout);
     this.pendingTimeouts.clear();
+  }
+
+  private async continuePausedRequest(
+    tabId: number,
+    event: RequestPausedEvent,
+    responseStage: boolean,
+  ): Promise<void> {
+    try {
+      await chrome.debugger.sendCommand(
+        { tabId },
+        responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest",
+        { requestId: event.requestId },
+      );
+    } catch (error) {
+      console.warn("FaultLab could not continue the paused request", error);
+    }
   }
 
   private handleConsoleIssue(

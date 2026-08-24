@@ -161,18 +161,28 @@ function App() {
   useEffect(() => {
     if (!state.recorder.active) return;
     const interval = window.setInterval(() => {
-      void send({ type: "GET_STATE" }).then((response) => {
-        if (response.state) setState(response.state);
-      });
+      void send({ type: "GET_STATE" })
+        .then((response) => {
+          if (response.state) setState(response.state);
+          if (!response.ok) setError(response.error ?? "Could not refresh recorder state");
+        })
+        .catch((reason: unknown) => {
+          setError(reason instanceof Error ? reason.message : "Could not refresh recorder state");
+        });
     }, 1000);
     return () => window.clearInterval(interval);
   }, [state.recorder.active]);
   useEffect(() => {
     if (!state.errorMonitor.active) return;
     const interval = window.setInterval(() => {
-      void send({ type: "GET_STATE" }).then((response) => {
-        if (response.state) setState(response.state);
-      });
+      void send({ type: "GET_STATE" })
+        .then((response) => {
+          if (response.state) setState(response.state);
+          if (!response.ok) setError(response.error ?? "Could not refresh error state");
+        })
+        .catch((reason: unknown) => {
+          setError(reason instanceof Error ? reason.message : "Could not refresh error state");
+        });
     }, 1000);
     return () => window.clearInterval(interval);
   }, [state.errorMonitor.active]);
@@ -352,9 +362,11 @@ function App() {
   const operationOptions = draft
     ? [
         ...new Set([
-          ...(draft.rules[0]?.matcher.graphqlOperationName
-            ? [draft.rules[0].matcher.graphqlOperationName]
-            : []),
+          ...draft.rules.flatMap((rule) =>
+            rule.matcher.graphqlOperationName
+              ? [rule.matcher.graphqlOperationName]
+              : [],
+          ),
           ...(discoveredData?.graphqlOperations ?? []),
         ]),
       ]
@@ -362,9 +374,9 @@ function App() {
   const urlOptions = draft
     ? [
         ...new Set([
-          ...(draft.rules[0]?.matcher.urlIncludes
-            ? [draft.rules[0].matcher.urlIncludes]
-            : []),
+          ...draft.rules.flatMap((rule) =>
+            rule.matcher.urlIncludes ? [rule.matcher.urlIncludes] : [],
+          ),
           ...(discoveredData?.urls ?? []),
         ]),
       ]
@@ -372,9 +384,11 @@ function App() {
   const jsonPathOptions = draft
     ? [
         ...new Set([
-          ...(draft.rules[0]?.action.type === "mutate"
-            ? draft.rules[0].action.mutations.map((mutation) => mutation.path)
-            : []),
+          ...draft.rules.flatMap((rule) =>
+            rule.action.type === "mutate"
+              ? rule.action.mutations.map((mutation) => mutation.path)
+              : [],
+          ),
           ...(discoveredData?.jsonPaths ?? []),
         ]),
       ]
@@ -1076,9 +1090,13 @@ function App() {
               </button>
             )}
             <div className="editor-actions">
-              <button className="secondary" type="button" onClick={() => void resetDraft()}>
-                Reset defaults
-              </button>
+              {draft.builtIn ? (
+                <button className="secondary" type="button" onClick={() => void resetDraft()}>
+                  Reset defaults
+                </button>
+              ) : (
+                <span />
+              )}
               <span />
               <button className="secondary" type="button" onClick={() => setDraft(null)}>
                 Cancel

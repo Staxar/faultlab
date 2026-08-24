@@ -1,6 +1,6 @@
 # Scenarios
 
-The `0.1.0` release exposes built-in presets in the Side Panel. The `0.2.0` development builder makes their rules configurable and also supports local custom scenarios with one or more rules. Sections explicitly marked "MVP 0.3" describe the remaining builder work.
+The historical `0.1.0` release exposed built-in presets. The current `0.2.0` development builder makes their rules configurable and supports local custom scenarios with one or more rules. Scenario activation and deactivation are handled by the background runtime and report adapter failures to the Side Panel.
 
 ## Common Rule Controls
 
@@ -70,15 +70,15 @@ Available in MVP 0.2 as a demonstration preset and configurable in the first MVP
 - removes the `/id` JSON field;
 - applies with probability 100%.
 
-After activating the scenario, refresh the target page. The adapter reads names from the request `operationName` or from named GraphQL definitions such as `query SearchResultItemV2(...)`, and parses JSON response fields into a selectable path list. The observed operation names and paths become available in the editor selects. A wildcard path applies the mutation to every matching array item. MVP 0.3 mutation authoring supports `remove`, `nullify`, `empty_array`, and `type_mismatch` only.
+After activating the scenario, refresh the target page. The adapter reads names from the request `operationName` or from named GraphQL definitions such as `query SearchResultItemV2(...)`, and parses JSON response fields into a selectable path list when a response mutation is being read. The observed operation names and paths become available in the editor selects. A wildcard path applies the mutation to every matching array item. MVP 0.3 mutation authoring supports `remove`, `nullify`, `empty_array`, and `type_mismatch` only.
 
 ## Custom Scenarios
 
-Custom scenarios can be created from the Side Panel with one or more rules. Each custom scenario supports the same matcher and action controls as the built-in presets, is stored under `faultlab.runtime`, and can be edited or deleted. Built-in scenarios cannot be deleted or converted into custom scenarios. Deleting the active custom scenario deactivates network interception first.
+Custom scenarios can be created from the Side Panel with one or more rules. Each custom scenario supports the same matcher and action controls as the built-in presets, is stored under `faultlab.runtime`, and can be edited or deleted. Built-in scenarios cannot be deleted or converted into custom scenarios. Custom scenarios do not support `Reset defaults`; only built-in presets have defaults to restore. Deleting the active custom scenario deactivates network interception first.
 
 ## Recorded Scenarios
 
-The recorder stores up to 500 unique network observations and 500 journey events for the selected tab. Journey events include navigation, clicks, and form changes; field values are not stored. A user can select observed requests and create a custom scenario. Each unique endpoint, method, resource type, and GraphQL operation becomes a delay rule with an 800 ms default delay. The generated scenario is local and editable; recording does not capture request bodies or send observations to a server.
+The recorder stores up to 500 unique network observations and 500 journey events for the selected tab. A new recording clears the previous recording; the user can also use Clear. Journey events include navigation, clicks, and form changes; field values are not stored. A user can select observed requests and create a custom scenario. Each unique endpoint, method, resource type, and GraphQL operation becomes a delay rule with an 800 ms default delay. The generated scenario is local and editable; recording does not capture request bodies or send observations to a server.
 
 ## Future Examples
 
@@ -101,4 +101,4 @@ These examples are useful acceptance scenarios for the builder, but are not buil
 
 ## Configuration Safety
 
-Every setting needs a default and bounded validation. A scenario cannot be saved without at least one valid rule. Resetting a built-in preset restores its safe defaults. Per-request application limits are bounded from 1 to 1000 and reset when the scenario is applied again. Configuration remains local to the extension and applies to the selected tab; multi-tab coordination and sharing are later work.
+Every setting needs a default and bounded validation. A scenario cannot be saved without at least one valid rule. Resetting a built-in preset restores its safe defaults. Per-request application limits are bounded from 1 to 1000 and reset when the scenario is applied again. Configuration remains local to the extension and applies to the selected tab; monitoring collects raw issue entries but does not yet group or correlate them. Multi-tab coordination and sharing are later work.

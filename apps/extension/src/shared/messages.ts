@@ -1,6 +1,56 @@
-import type { RuntimeMessage } from "@faultlab/core";
+import { validateScenario, type RuntimeMessage, type Scenario } from "@faultlab/core";
 
 export const FAULTLAB_CHANNEL = "faultlab";
+
+function isScenarioMessage(value: unknown): value is Scenario {
+  if (typeof value !== "object" || value === null) return false;
+  const scenario = value as Record<string, unknown>;
+  if (
+    typeof scenario.id !== "string" ||
+    typeof scenario.name !== "string" ||
+    typeof scenario.description !== "string" ||
+    typeof scenario.builtIn !== "boolean" ||
+    !Array.isArray(scenario.rules)
+  ) {
+    return false;
+  }
+  if (
+    scenario.rules.some((rule) => {
+      if (typeof rule !== "object" || rule === null) return true;
+      const candidate = rule as Record<string, unknown>;
+      if (
+        typeof candidate.id !== "string" ||
+        typeof candidate.name !== "string" ||
+        typeof candidate.enabled !== "boolean" ||
+        typeof candidate.matcher !== "object" ||
+        candidate.matcher === null ||
+        typeof candidate.action !== "object" ||
+        candidate.action === null
+      ) {
+        return true;
+      }
+      const matcher = candidate.matcher as Record<string, unknown>;
+      if (
+        (matcher.methods !== undefined && !Array.isArray(matcher.methods)) ||
+        (matcher.resourceTypes !== undefined &&
+          !Array.isArray(matcher.resourceTypes))
+      ) {
+        return true;
+      }
+      const action = candidate.action as Record<string, unknown>;
+      return (
+        action.type === "mutate" && !Array.isArray(action.mutations)
+      );
+    })
+  ) {
+    return false;
+  }
+  try {
+    return validateScenario(scenario as unknown as Scenario) === null;
+  } catch {
+    return false;
+  }
+}
 
 export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
   if (typeof message !== "object" || message == null || !("type" in message)) {
@@ -24,9 +74,7 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
     return typeof candidate.enabled === "boolean";
   }
   if (candidate.type === "UPDATE_SCENARIO") {
-    return (
-      typeof candidate.scenario === "object" && candidate.scenario !== null
-    );
+    return isScenarioMessage(candidate.scenario);
   }
   if (candidate.type === "RESET_SCENARIO") {
     return typeof candidate.scenarioId === "string";
@@ -35,9 +83,7 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
     return typeof candidate.scenarioId === "string";
   }
   if (candidate.type === "CREATE_SCENARIO") {
-    return (
-      typeof candidate.scenario === "object" && candidate.scenario !== null
-    );
+    return isScenarioMessage(candidate.scenario);
   }
   if (
     candidate.type === "START_RECORDING" ||
@@ -84,6 +130,14 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
       typeof issue.timestamp !== "number" ||
       !Number.isFinite(issue.timestamp) ||
       typeof issue.message !== "string"
+    ) {
+      return false;
+    }
+    if (
+      (issue.source !== undefined && typeof issue.source !== "string") ||
+      (issue.url !== undefined && typeof issue.url !== "string") ||
+      (issue.status !== undefined &&
+        (typeof issue.status !== "number" || !Number.isFinite(issue.status)))
     ) {
       return false;
     }
