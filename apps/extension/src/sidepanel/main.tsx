@@ -89,6 +89,19 @@ function createCustomRule(number: number) {
   };
 }
 
+function hasBroadMatcher(scenario: Scenario): boolean {
+  return scenario.rules.some((rule) => {
+    if (!rule.enabled) return false;
+    const matcher = rule.matcher;
+    return !(
+      matcher.urlIncludes ||
+      matcher.methods?.length ||
+      matcher.resourceTypes?.length ||
+      matcher.graphqlOperationName
+    );
+  });
+}
+
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
   chrome.runtime.sendMessage(message);
 function App() {
@@ -222,12 +235,21 @@ function App() {
       setDraft(null);
     }
   };
-  const activate = (s: Scenario) =>
-    void refresh(
-      state.activeScenarioId === s.id
-        ? { type: "DEACTIVATE_SCENARIO" }
-        : { type: "ACTIVATE_SCENARIO", scenarioId: s.id },
-    );
+  const activate = (s: Scenario) => {
+    if (state.activeScenarioId === s.id) {
+      void refresh({ type: "DEACTIVATE_SCENARIO" });
+      return;
+    }
+    if (
+      hasBroadMatcher(s) &&
+      !window.confirm(
+        `${s.name} contains a rule that matches all requests. Activate it?`,
+      )
+    ) {
+      return;
+    }
+    void refresh({ type: "ACTIVATE_SCENARIO", scenarioId: s.id });
+  };
     const deleteScenario = async (scenario: Scenario) => {
       if (!window.confirm(`Delete ${scenario.name}?`)) return;
       await refresh({ type: "DELETE_SCENARIO", scenarioId: scenario.id });
@@ -583,6 +605,65 @@ function App() {
                     }
                   />
                 </label>
+                {rule.action.type !== "throttle" && (
+                  <>
+                    <label className="check-line">
+                      <input
+                        type="checkbox"
+                        checked={rule.maxApplications !== undefined}
+                        onChange={(event) =>
+                          updateDraft((scenario) => ({
+                            ...scenario,
+                            rules: scenario.rules.map((item, index) =>
+                              index === ruleIndex
+                                ? {
+                                    ...item,
+                                    maxApplications: event.target.checked
+                                      ? item.maxApplications ?? 1
+                                      : undefined,
+                                  }
+                                : item,
+                            ),
+                          }))
+                        }
+                      />
+                      Limit applications per activation
+                    </label>
+                    {rule.maxApplications !== undefined && (
+                      <label>
+                        Maximum applications
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          step="1"
+                          value={rule.maxApplications}
+                          onChange={(event) =>
+                            updateDraft((scenario) => ({
+                              ...scenario,
+                              rules: scenario.rules.map((item, index) =>
+                                index === ruleIndex
+                                  ? {
+                                      ...item,
+                                      maxApplications: Number(event.target.value),
+                                    }
+                                  : item,
+                              ),
+                            }))
+                          }
+                        />
+                        <span className="field-hint">
+                          Resets when this scenario is activated.
+                        </span>
+                      </label>
+                    )}
+                  </>
+                )}
+                {rule.action.type === "throttle" && (
+                  <span className="field-hint">
+                    Throttle is a tab-level setting and has no per-request application limit.
+                  </span>
+                )}
                 {rule.action.type === "error" && (
                   <label>
                     HTTP status

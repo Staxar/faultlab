@@ -32,6 +32,7 @@ export class ChromeNetworkAdapter {
   private observedUrls = new Set<string>();
   private observedGraphqlOperations = new Set<string>();
   private observedJsonPaths = new Set<string>();
+  private applicationCounts = new Map<string, number>();
 
   constructor() {
     chrome.debugger.onEvent.addListener((source, method, params) => {
@@ -138,6 +139,7 @@ export class ChromeNetworkAdapter {
               uploadThroughput: -1,
             },
       );
+      this.applicationCounts.clear();
       this.rules = rules;
     } catch (error) {
       await this.stopNow();
@@ -148,6 +150,7 @@ export class ChromeNetworkAdapter {
 
   private async stopNow(): Promise<void> {
     this.rules = [];
+    this.applicationCounts.clear();
     this.clearPendingTimeouts();
     if (this.attachedTabId == null) return;
     const tabId = this.attachedTabId;
@@ -196,6 +199,7 @@ export class ChromeNetworkAdapter {
         (candidate) =>
           candidate.action.type !== "throttle" &&
           candidate.action.type !== "mutate" &&
+          this.hasRemainingApplications(candidate) &&
           matchesRule(candidate, {
             url: event.request.url,
             method: event.request.method,
@@ -212,6 +216,7 @@ export class ChromeNetworkAdapter {
       }
 
       if (rule.action.type === "error") {
+        this.recordApplication(rule);
         await chrome.debugger.sendCommand({ tabId }, "Fetch.fulfillRequest", {
           requestId: event.requestId,
           responseCode: rule.action.status,
@@ -224,6 +229,7 @@ export class ChromeNetworkAdapter {
       }
 
       if (rule.action.type === "offline") {
+        this.recordApplication(rule);
         await chrome.debugger.sendCommand({ tabId }, "Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "InternetDisconnected",
@@ -262,6 +268,7 @@ export class ChromeNetworkAdapter {
         },
         Math.max(0, rule.action.delayMs),
       );
+      this.recordApplication(rule);
       this.pendingTimeouts.add(timeout);
     } catch (error) {
       console.warn("FaultLab could not handle intercepted request", error);
@@ -281,6 +288,7 @@ export class ChromeNetworkAdapter {
     const rule = this.rules.find(
       (candidate) =>
         candidate.action.type === "mutate" &&
+        this.hasRemainingApplications(candidate) &&
         matchesRule(candidate, {
           url: event.request.url,
           method: event.request.method,
@@ -342,6 +350,7 @@ export class ChromeNetworkAdapter {
         responseHeaders: responseHeadersForBody(event.responseHeaders),
         body: encodeBase64Utf8(mutatedBody),
       });
+      this.recordApplication(rule);
     } catch (error) {
       console.warn("FaultLab could not fulfill the mutated response", error);
       await continueResponse();
@@ -351,6 +360,21 @@ export class ChromeNetworkAdapter {
   private clearPendingTimeouts(): void {
     for (const timeout of this.pendingTimeouts) clearTimeout(timeout);
     this.pendingTimeouts.clear();
+  }
+
+  private hasRemainingApplications(rule: FaultRule): boolean {
+    return (
+      rule.maxApplications === undefined ||
+      (this.applicationCounts.get(rule.id) ?? 0) < rule.maxApplications
+    );
+  }
+
+  private recordApplication(rule: FaultRule): void {
+    if (rule.maxApplications === undefined) return;
+    this.applicationCounts.set(
+      rule.id,
+      (this.applicationCounts.get(rule.id) ?? 0) + 1,
+    );
   }
 }
 

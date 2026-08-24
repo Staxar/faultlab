@@ -31,6 +31,7 @@ export interface FaultRule {
   id: string;
   name: string;
   enabled: boolean;
+  maxApplications?: number;
   matcher: RequestMatcher;
   action: RuleAction;
 }
@@ -81,6 +82,14 @@ export function validateScenario(scenario: Scenario): string | null {
     if (!rule.id || ruleIds.has(rule.id)) return "Rule IDs must be unique";
     ruleIds.add(rule.id);
     if (!rule.name.trim()) return "Rule name is required";
+    if (
+      rule.maxApplications !== undefined &&
+      (!Number.isInteger(rule.maxApplications) ||
+        rule.maxApplications < 1 ||
+        rule.maxApplications > 1000)
+    ) {
+      return "Application limit must be between 1 and 1000";
+    }
     if (rule.matcher.urlIncludes && rule.matcher.urlIncludes.length > 200) {
       return "URL matcher is too long";
     }
