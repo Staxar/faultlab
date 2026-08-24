@@ -39,6 +39,7 @@ export interface Scenario {
   id: string;
   name: string;
   description: string;
+  builtIn: boolean;
   rules: FaultRule[];
 }
 
@@ -65,7 +66,9 @@ export type RuntimeMessage =
   | { type: "ACTIVATE_SCENARIO"; scenarioId: string }
   | { type: "DEACTIVATE_SCENARIO" }
   | { type: "UPDATE_SCENARIO"; scenario: Scenario }
-  | { type: "RESET_SCENARIO"; scenarioId: string };
+  | { type: "RESET_SCENARIO"; scenarioId: string }
+  | { type: "CREATE_SCENARIO"; scenario: Scenario }
+  | { type: "DELETE_SCENARIO"; scenarioId: string };
 
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";
@@ -183,6 +186,7 @@ export const defaultScenarios: Scenario[] = [
     id: "backend-down",
     name: "Backend Down",
     description: "Turn fetch/XHR requests into HTTP 500 responses.",
+    builtIn: true,
     rules: [
       {
         id: "backend-down-500",
@@ -197,6 +201,7 @@ export const defaultScenarios: Scenario[] = [
     id: "slow-network",
     name: "Slow Network",
     description: "Add 800ms latency and bandwidth limits to requests.",
+    builtIn: true,
     rules: [
       {
         id: "slow-network-throttle",
@@ -224,6 +229,7 @@ export const defaultScenarios: Scenario[] = [
     id: "offline",
     name: "Offline",
     description: "Fail selected network requests as disconnected.",
+    builtIn: true,
     rules: [
       {
         id: "offline",
@@ -238,6 +244,7 @@ export const defaultScenarios: Scenario[] = [
     id: "bad-data",
     name: "Bad Data",
     description: "Mutate JSON responses to expose fragile data handling.",
+    builtIn: true,
     rules: [
       {
         id: "bad-data-remove-id",

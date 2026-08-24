@@ -29,6 +29,12 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
   if (candidate.type === "RESET_SCENARIO") {
     return typeof candidate.scenarioId === "string";
   }
+  if (candidate.type === "DELETE_SCENARIO") {
+    return typeof candidate.scenarioId === "string";
+  }
+  if (candidate.type === "CREATE_SCENARIO") {
+    return typeof candidate.scenario === "object" && candidate.scenario !== null;
+  }
   return (
     candidate.type === "ACTIVATE_SCENARIO" &&
     typeof candidate.scenarioId === "string"

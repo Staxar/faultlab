@@ -35,6 +35,59 @@ const MUTATION_TYPES: JsonMutation["op"][] = [
   "type_mismatch",
 ];
 const TARGET_TYPES = ["string", "number", "boolean", "null"] as const;
+const ACTION_TYPES: RuleAction["type"][] = [
+  "error",
+  "delay",
+  "throttle",
+  "offline",
+  "mutate",
+];
+
+function createAction(type: RuleAction["type"]): RuleAction {
+  if (type === "error") return { type, status: 500, probability: 1 };
+  if (type === "delay") return { type, delayMs: 800, probability: 1 };
+  if (type === "throttle") {
+    return {
+      type,
+      latencyMs: 0,
+      downloadKbps: 500,
+      uploadKbps: 500,
+      probability: 1,
+    };
+  }
+  if (type === "mutate") {
+    return { type, mutations: [{ op: "remove", path: "/field" }], probability: 1 };
+  }
+  return { type, probability: 1 };
+}
+
+function createCustomScenario(): Scenario {
+  return {
+    id: `custom-${crypto.randomUUID()}`,
+    name: "New scenario",
+    description: "A local custom failure scenario.",
+    builtIn: false,
+    rules: [
+      {
+        id: `rule-${crypto.randomUUID()}`,
+        name: "Failure rule",
+        enabled: true,
+        matcher: { resourceTypes: ["fetch", "xhr"] },
+        action: createAction("delay"),
+      },
+    ],
+  };
+}
+
+function createCustomRule(number: number) {
+  return {
+    id: `rule-${crypto.randomUUID()}`,
+    name: `Failure rule ${number}`,
+    enabled: true,
+    matcher: { resourceTypes: ["fetch", "xhr"] },
+    action: createAction("delay"),
+  };
+}
 
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
   chrome.runtime.sendMessage(message);
@@ -149,9 +202,17 @@ function App() {
     setError(null);
     setDraft(structuredClone(scenario));
   };
+  const openNewEditor = () => {
+    setError(null);
+    setDraft(createCustomScenario());
+  };
   const saveDraft = async () => {
     if (!draft) return;
-    if (await refresh({ type: "UPDATE_SCENARIO", scenario: draft })) {
+    const exists = state.scenarios.some((scenario) => scenario.id === draft.id);
+    const message: RuntimeMessage = exists
+      ? { type: "UPDATE_SCENARIO", scenario: draft }
+      : { type: "CREATE_SCENARIO", scenario: draft };
+    if (await refresh(message)) {
       setDraft(null);
     }
   };
@@ -167,6 +228,22 @@ function App() {
         ? { type: "DEACTIVATE_SCENARIO" }
         : { type: "ACTIVATE_SCENARIO", scenarioId: s.id },
     );
+    const deleteScenario = async (scenario: Scenario) => {
+      if (!window.confirm(`Delete ${scenario.name}?`)) return;
+      await refresh({ type: "DELETE_SCENARIO", scenarioId: scenario.id });
+    };
+    const addRule = () =>
+      updateDraft((scenario) =>
+        scenario.builtIn
+          ? scenario
+          : { ...scenario, rules: [...scenario.rules, createCustomRule(scenario.rules.length + 1)] },
+      );
+    const removeRule = (ruleIndex: number) =>
+      updateDraft((scenario) =>
+        scenario.builtIn || scenario.rules.length === 1
+          ? scenario
+          : { ...scenario, rules: scenario.rules.filter((_, index) => index !== ruleIndex) },
+      );
   const operationOptions = draft
     ? [
         ...new Set([
@@ -223,10 +300,15 @@ function App() {
             : "Fault injection disabled"}
       </div>
       {error && <div className="error">{error}</div>}
-      <small>QUICK CHAOS</small>
+      <div className="section-heading">
+        <small>QUICK CHAOS</small>
+        <button className="secondary add-scenario" disabled={loading} onClick={openNewEditor}>
+          + New scenario
+        </button>
+      </div>
       <section>
         {state.scenarios.map((s) => (
-          <article className="scenario-row" key={s.id}>
+          <article className={s.builtIn ? "scenario-row" : "scenario-row custom-row"} key={s.id}>
             <button
               className={
                 state.activeScenarioId === s.id ? "scenario active" : "scenario"
@@ -258,6 +340,17 @@ function App() {
             >
               ⚙
             </button>
+            {!s.builtIn && (
+              <button
+                className="configure delete-scenario"
+                disabled={loading}
+                title={`Delete ${s.name}`}
+                aria-label={`Delete ${s.name}`}
+                onClick={() => void deleteScenario(s)}
+              >
+                ×
+              </button>
+            )}
           </article>
         ))}
       </section>
@@ -288,6 +381,9 @@ function App() {
                 ×
               </button>
             </header>
+            {!draft.builtIn && !state.scenarios.some((scenario) => scenario.id === draft.id) && (
+              <div className="field-hint">Custom scenarios are stored only in this browser.</div>
+            )}
             <label>
               Scenario name
               <input
@@ -317,7 +413,36 @@ function App() {
             </label>
             {draft.rules.map((rule, ruleIndex) => (
               <fieldset className="rule-editor" key={rule.id}>
-                <legend>{rule.name}</legend>
+                <legend>
+                  <span>{rule.name}</span>
+                  {!draft.builtIn && (
+                    <button
+                      className="remove-rule"
+                      type="button"
+                      disabled={draft.rules.length === 1}
+                      title="Remove rule"
+                      aria-label="Remove rule"
+                      onClick={() => removeRule(ruleIndex)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </legend>
+                <label>
+                  Rule name
+                  <input
+                    value={rule.name}
+                    maxLength={50}
+                    onChange={(event) =>
+                      updateDraft((scenario) => ({
+                        ...scenario,
+                        rules: scenario.rules.map((item, index) =>
+                          index === ruleIndex ? { ...item, name: event.target.value } : item,
+                        ),
+                      }))
+                    }
+                  />
+                </label>
                 <label className="check-line">
                   <input
                     type="checkbox"
@@ -334,6 +459,28 @@ function App() {
                     }
                   />
                   Rule enabled
+                </label>
+                <label>
+                  Failure action
+                  <select
+                    value={rule.action.type}
+                    onChange={(event) =>
+                      updateDraft((scenario) => ({
+                        ...scenario,
+                        rules: scenario.rules.map((item, index) =>
+                          index === ruleIndex
+                            ? { ...item, action: createAction(event.target.value as RuleAction["type"]) }
+                            : item,
+                        ),
+                      }))
+                    }
+                  >
+                    {ACTION_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   Request endpoint
@@ -663,6 +810,11 @@ function App() {
                 )}
               </fieldset>
             ))}
+            {!draft.builtIn && (
+              <button className="secondary add-rule" type="button" onClick={addRule}>
+                + Add rule
+              </button>
+            )}
             <div className="editor-actions">
               <button className="secondary" type="button" onClick={() => void resetDraft()}>
                 Reset defaults

@@ -77,6 +77,17 @@ section {
   gap: 7px;
   margin-top: 9px;
 }
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+.add-scenario {
+  padding: 5px 8px;
+  font-size: 10px;
+}
 .scenario {
   min-width: 0;
   width: auto;
@@ -96,6 +107,9 @@ section {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 34px;
   gap: 6px;
+}
+.scenario-row.custom-row {
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
 }
 .scenario-row .scenario {
   min-height: 64px;
@@ -240,10 +254,30 @@ footer {
   margin: 15px 0;
 }
 .rule-editor legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   color: #ffb095;
   padding: 0 5px;
   font-size: 11px;
   font-weight: 800;
+}
+.remove-rule {
+  border: 0;
+  background: transparent;
+  color: #858894;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.remove-rule:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.add-rule {
+  width: 100%;
+  margin-bottom: 2px;
 }
 .check-line,
 .choice {

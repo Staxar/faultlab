@@ -15,10 +15,29 @@ async function getState(): Promise<RuntimeState> {
   const stored = await chrome.storage.local.get(KEY);
   const storedState = stored[KEY] as RuntimeState | undefined;
   if (storedState) {
-    const knownIds = new Set(storedState.scenarios.map((scenario) => scenario.id));
-    const missingDefaults = defaultScenarios.filter((scenario) => !knownIds.has(scenario.id));
-    if (missingDefaults.length === 0) return storedState;
-    const migratedState = { ...storedState, scenarios: [...storedState.scenarios, ...missingDefaults] };
+    const defaultIds = new Set(defaultScenarios.map((scenario) => scenario.id));
+    const migratedScenarios = storedState.scenarios.map((scenario) => ({
+      ...scenario,
+      builtIn: scenario.builtIn ?? defaultIds.has(scenario.id),
+    }));
+    const knownIds = new Set(
+      storedState.scenarios.map((scenario) => scenario.id),
+    );
+    const missingDefaults = defaultScenarios.filter(
+      (scenario) => !knownIds.has(scenario.id),
+    );
+    if (
+      missingDefaults.length === 0 &&
+      migratedScenarios.every(
+        (scenario, index) =>
+          scenario.builtIn === storedState.scenarios[index].builtIn,
+      )
+    )
+      return { ...storedState, scenarios: migratedScenarios };
+    const migratedState = {
+      ...storedState,
+      scenarios: [...migratedScenarios, ...missingDefaults],
+    };
     await chrome.storage.local.set({ [KEY]: migratedState });
     return migratedState;
   }
@@ -68,7 +87,8 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
     );
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === "loading") networkAdapter.clearDiscoveredData(tabId);
+  if (changeInfo.status === "loading")
+    networkAdapter.clearDiscoveredData(tabId);
 });
 
 chrome.runtime.onSuspend.addListener(() => {
@@ -116,13 +136,21 @@ chrome.runtime.onMessage.addListener(
       if (typedMessage.type === "UPDATE_SCENARIO") {
         const validationError = validateScenario(typedMessage.scenario);
         if (validationError) return { ok: false, error: validationError };
-        if (!state.scenarios.some((scenario) => scenario.id === typedMessage.scenario.id)) {
+        const currentScenario = state.scenarios.find(
+          (scenario) => scenario.id === typedMessage.scenario.id,
+        );
+        if (!currentScenario) {
           return { ok: false, error: "Unknown scenario" };
+        }
+        if (currentScenario.builtIn !== typedMessage.scenario.builtIn) {
+          return { ok: false, error: "Scenario type cannot be changed" };
         }
         const next = {
           ...state,
           scenarios: state.scenarios.map((scenario) =>
-            scenario.id === typedMessage.scenario.id ? typedMessage.scenario : scenario,
+            scenario.id === typedMessage.scenario.id
+              ? typedMessage.scenario
+              : scenario,
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -137,7 +165,50 @@ chrome.runtime.onMessage.addListener(
         const next = {
           ...state,
           scenarios: state.scenarios.map((scenario) =>
-            scenario.id === typedMessage.scenarioId ? defaultScenario : scenario,
+            scenario.id === typedMessage.scenarioId
+              ? defaultScenario
+              : scenario,
+          ),
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        await syncNetwork(next);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "CREATE_SCENARIO") {
+        const validationError = validateScenario(typedMessage.scenario);
+        if (validationError) return { ok: false, error: validationError };
+        if (typedMessage.scenario.builtIn) {
+          return { ok: false, error: "Custom scenarios cannot be built-in" };
+        }
+        if (
+          state.scenarios.some(
+            (scenario) => scenario.id === typedMessage.scenario.id,
+          )
+        ) {
+          return { ok: false, error: "Scenario ID already exists" };
+        }
+        const next = {
+          ...state,
+          scenarios: [...state.scenarios, typedMessage.scenario],
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "DELETE_SCENARIO") {
+        const scenario = state.scenarios.find(
+          (candidate) => candidate.id === typedMessage.scenarioId,
+        );
+        if (!scenario) return { ok: false, error: "Unknown scenario" };
+        if (scenario.builtIn)
+          return { ok: false, error: "Built-in scenarios cannot be deleted" };
+        const next = {
+          ...state,
+          activeScenarioId:
+            state.activeScenarioId === scenario.id
+              ? null
+              : state.activeScenarioId,
+          scenarios: state.scenarios.filter(
+            (candidate) => candidate.id !== scenario.id,
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -149,14 +220,12 @@ chrome.runtime.onMessage.addListener(
       () => undefined,
       () => undefined,
     );
-    void operation
-      .then(sendResponse)
-      .catch((e) =>
-        sendResponse({
-          ok: false,
-          error: e instanceof Error ? e.message : "Unknown error",
-        }),
-      );
+    void operation.then(sendResponse).catch((e) =>
+      sendResponse({
+        ok: false,
+        error: e instanceof Error ? e.message : "Unknown error",
+      }),
+    );
     return true;
   },
 );
