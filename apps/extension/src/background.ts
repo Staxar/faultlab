@@ -26,6 +26,7 @@ async function getState(): Promise<RuntimeState> {
       active: false,
       requests: [] as RecordedRequest[],
     };
+    const recorderWasStored = storedState.recorder !== undefined;
     networkAdapter.restoreRecordedRequests(storedRecorder.requests);
     const liveRequests = networkAdapter.getRecordedRequests();
     const recorder = storedRecorder.active
@@ -39,6 +40,7 @@ async function getState(): Promise<RuntimeState> {
     );
     if (
       missingDefaults.length === 0 &&
+      recorderWasStored &&
       migratedScenarios.every(
         (scenario, index) =>
           scenario.builtIn === storedState.scenarios[index].builtIn,
