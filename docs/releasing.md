@@ -38,7 +38,7 @@ pnpm build
 git diff --check
 ```
 
-Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `sidepanel.html`, and the generated assets. Load `apps/extension/dist` as an unpacked extension from `chrome://extensions` and manually verify:
+Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `sidepanel.html`, the generated assets, and `icons/icon-16.png`, `icons/icon-32.png`, `icons/icon-48.png`, and `icons/icon-128.png`. Load `apps/extension/dist` as an unpacked extension from `chrome://extensions` and manually verify:
 
 - the Side Panel opens;
 - Backend Down, Slow Network, Offline, and Bad Data can be activated;
@@ -115,7 +115,7 @@ Check the archive manually and upload `faultlab-0.1.0.zip`. Keep the ZIP outside
 1. Register for a Chrome Web Store developer account and complete the one-time registration payment, if required by Google.
 2. Create a new item in the Developer Dashboard.
 3. Upload `faultlab-0.1.0.zip`.
-4. Complete the store listing: name, short description, detailed description, category, language, screenshots, and promotional images where required.
+4. Complete the store listing: name, short description, detailed description, category, language, screenshots, and promotional images where required. Use `apps/extension/public/icons/icon-128.png` as the extension icon and prepare the additional store artwork required by the dashboard from the same FaultLab branding.
 5. Explain the `debugger`, `storage`, `sidePanel`, and `tabs` permissions in the privacy practices and permission justification fields. State that runtime state is stored locally and that FaultLab does not require a backend.
 6. Provide a privacy policy URL if the dashboard requires one. The policy must match the actual data behavior of the extension.
 7. Check the listing preview, submit for review, and record the submitted version and review status.
