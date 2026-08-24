@@ -1,0 +1,394 @@
+import {
+  applyJsonMutations,
+  collectJsonPaths,
+  getGraphqlOperationName,
+  matchesRule,
+  shouldApply,
+  type FaultRule,
+} from "@faultlab/core";
+
+const MAX_MUTATION_BODY_BYTES = 5 * 1024 * 1024;
+
+type ResponseHeader = { name: string; value: string };
+
+type RequestPausedEvent = {
+  requestId: string;
+  request: {
+    url: string;
+    method: string;
+    postData?: string;
+  };
+  resourceType?: string;
+  responseStatusCode?: number;
+  responsePhrase?: string;
+  responseHeaders?: ResponseHeader[];
+};
+
+export class ChromeNetworkAdapter {
+  private attachedTabId: number | null = null;
+  private rules: FaultRule[] = [];
+  private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+  private operation = Promise.resolve();
+  private observedUrls = new Set<string>();
+  private observedGraphqlOperations = new Set<string>();
+  private observedJsonPaths = new Set<string>();
+
+  constructor() {
+    chrome.debugger.onEvent.addListener((source, method, params) => {
+      if (method !== "Fetch.requestPaused" || source.tabId == null) return;
+      void this.handleRequest(source.tabId, params as RequestPausedEvent);
+    });
+
+    chrome.debugger.onDetach.addListener((source) => {
+      if (source.tabId === this.attachedTabId) {
+        this.attachedTabId = null;
+        this.rules = [];
+        this.clearPendingTimeouts();
+      }
+    });
+  }
+
+  async applyRules(tabId: number, rules: FaultRule[]): Promise<void> {
+    const operation = this.operation.then(() =>
+      this.applyRulesNow(tabId, rules),
+    );
+    this.operation = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
+  }
+
+  async stop(): Promise<void> {
+    const operation = this.operation.then(() => this.stopNow());
+    this.operation = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
+  }
+
+  getGraphqlOperations(): string[] {
+    return [...this.observedGraphqlOperations].sort();
+  }
+
+  getDiscoveredData(): {
+    urls: string[];
+    graphqlOperations: string[];
+    jsonPaths: string[];
+  } {
+    return {
+      urls: [...this.observedUrls].sort(),
+      graphqlOperations: this.getGraphqlOperations(),
+      jsonPaths: [...this.observedJsonPaths].sort(),
+    };
+  }
+
+  clearDiscoveredData(tabId: number): void {
+    if (this.attachedTabId !== tabId) return;
+    this.observedUrls.clear();
+    this.observedGraphqlOperations.clear();
+    this.observedJsonPaths.clear();
+  }
+
+  private async applyRulesNow(
+    tabId: number,
+    rules: FaultRule[],
+  ): Promise<void> {
+    if (this.attachedTabId !== tabId) {
+      await this.stopNow();
+      this.observedUrls.clear();
+      this.observedGraphqlOperations.clear();
+      this.observedJsonPaths.clear();
+      try {
+        await chrome.debugger.attach({ tabId }, "1.3");
+        this.attachedTabId = tabId;
+        await chrome.debugger.sendCommand({ tabId }, "Fetch.enable", {
+          patterns: [{ requestStage: "Request" }, { requestStage: "Response" }],
+        });
+      } catch (error) {
+        await this.stopNow();
+        console.warn("FaultLab could not attach to the selected tab", error);
+        throw error;
+      }
+    }
+
+    try {
+      const throttle = rules.find(
+        (rule) =>
+          rule.enabled &&
+          rule.action.type === "throttle" &&
+          shouldApply(rule.action.probability),
+      );
+      await chrome.debugger.sendCommand(
+        { tabId },
+        "Network.emulateNetworkConditions",
+        throttle?.action.type === "throttle"
+          ? {
+              offline: false,
+              latency: Math.max(0, throttle.action.latencyMs),
+              downloadThroughput:
+                Math.max(0, throttle.action.downloadKbps) * 1024,
+              uploadThroughput: Math.max(0, throttle.action.uploadKbps) * 1024,
+            }
+          : {
+              offline: false,
+              latency: 0,
+              downloadThroughput: -1,
+              uploadThroughput: -1,
+            },
+      );
+      this.rules = rules;
+    } catch (error) {
+      await this.stopNow();
+      console.warn("FaultLab could not configure the selected tab", error);
+      throw error;
+    }
+  }
+
+  private async stopNow(): Promise<void> {
+    this.rules = [];
+    this.clearPendingTimeouts();
+    if (this.attachedTabId == null) return;
+    const tabId = this.attachedTabId;
+    this.attachedTabId = null;
+    try {
+      await chrome.debugger.sendCommand(
+        { tabId },
+        "Network.emulateNetworkConditions",
+        {
+          offline: false,
+          latency: 0,
+          downloadThroughput: -1,
+          uploadThroughput: -1,
+        },
+      );
+    } catch (error) {
+      console.warn("FaultLab could not reset network conditions", error);
+    }
+    try {
+      await chrome.debugger.detach({ tabId });
+    } catch (error) {
+      console.warn("FaultLab could not detach from the selected tab", error);
+    }
+  }
+
+  private async handleRequest(
+    tabId: number,
+    event: RequestPausedEvent,
+  ): Promise<void> {
+    if (tabId !== this.attachedTabId) return;
+
+    try {
+      const graphqlOperationName = getGraphqlOperationName(event.request.postData);
+      const endpoint = normalizeEndpoint(event.request.url);
+      if (endpoint) this.observedUrls.add(endpoint);
+      if (graphqlOperationName) {
+        this.observedGraphqlOperations.add(graphqlOperationName);
+      }
+
+      if (event.responseStatusCode != null) {
+        await this.handleResponse(tabId, event, graphqlOperationName);
+        return;
+      }
+
+      const rule = this.rules.find(
+        (candidate) =>
+          candidate.action.type !== "throttle" &&
+          candidate.action.type !== "mutate" &&
+          matchesRule(candidate, {
+            url: event.request.url,
+            method: event.request.method,
+            resourceType: event.resourceType?.toLowerCase(),
+            graphqlOperationName,
+          }),
+      );
+
+      if (!rule || !shouldApply(rule.action.probability)) {
+        await chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", {
+          requestId: event.requestId,
+        });
+        return;
+      }
+
+      if (rule.action.type === "error") {
+        await chrome.debugger.sendCommand({ tabId }, "Fetch.fulfillRequest", {
+          requestId: event.requestId,
+          responseCode: rule.action.status,
+          responseHeaders: [
+            { name: "Content-Type", value: "application/json" },
+          ],
+          body: btoa(JSON.stringify({ error: "Fault injected by FaultLab" })),
+        });
+        return;
+      }
+
+      if (rule.action.type === "offline") {
+        await chrome.debugger.sendCommand({ tabId }, "Fetch.failRequest", {
+          requestId: event.requestId,
+          errorReason: "InternetDisconnected",
+        });
+        return;
+      }
+
+      if (rule.action.type === "throttle") {
+        await chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", {
+          requestId: event.requestId,
+        });
+        return;
+      }
+
+      if (rule.action.type !== "delay") {
+        await chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", {
+          requestId: event.requestId,
+        });
+        return;
+      }
+
+      const timeout = setTimeout(
+        () => {
+          this.pendingTimeouts.delete(timeout);
+          if (this.attachedTabId !== tabId) return;
+          void chrome.debugger
+            .sendCommand({ tabId }, "Fetch.continueRequest", {
+              requestId: event.requestId,
+            })
+            .catch((error) =>
+              console.warn(
+                "FaultLab could not continue delayed request",
+                error,
+              ),
+            );
+        },
+        Math.max(0, rule.action.delayMs),
+      );
+      this.pendingTimeouts.add(timeout);
+    } catch (error) {
+      console.warn("FaultLab could not handle intercepted request", error);
+    }
+  }
+
+  private async handleResponse(
+    tabId: number,
+    event: RequestPausedEvent,
+    graphqlOperationName = getGraphqlOperationName(event.request.postData),
+  ): Promise<void> {
+    const continueResponse = async () => {
+      await chrome.debugger.sendCommand({ tabId }, "Fetch.continueResponse", {
+        requestId: event.requestId,
+      });
+    };
+    const rule = this.rules.find(
+      (candidate) =>
+        candidate.action.type === "mutate" &&
+        matchesRule(candidate, {
+          url: event.request.url,
+          method: event.request.method,
+          resourceType: event.resourceType?.toLowerCase(),
+          graphqlOperationName,
+        }),
+    );
+
+    if (
+      !rule ||
+      rule.action.type !== "mutate" ||
+      !shouldApply(rule.action.probability)
+    ) {
+      await continueResponse();
+      return;
+    }
+
+    let responseBody: string;
+    try {
+      const result = (await chrome.debugger.sendCommand(
+        { tabId },
+        "Fetch.getResponseBody",
+        { requestId: event.requestId },
+      )) as { body: string; base64Encoded?: boolean };
+      responseBody = result.base64Encoded
+        ? decodeBase64Utf8(result.body)
+        : result.body;
+    } catch (error) {
+      console.warn("FaultLab could not read the response body", error);
+      await continueResponse();
+      return;
+    }
+
+    if (
+      new TextEncoder().encode(responseBody).byteLength >
+      MAX_MUTATION_BODY_BYTES
+    ) {
+      console.warn("FaultLab skipped mutation for a response larger than 5 MB");
+      await continueResponse();
+      return;
+    }
+
+    for (const path of collectJsonPaths(responseBody)) {
+      if (this.observedJsonPaths.size >= 2000) break;
+      this.observedJsonPaths.add(path);
+    }
+
+    const mutatedBody = applyJsonMutations(responseBody, rule.action.mutations);
+    if (mutatedBody === responseBody) {
+      await continueResponse();
+      return;
+    }
+
+    try {
+      await chrome.debugger.sendCommand({ tabId }, "Fetch.fulfillRequest", {
+        requestId: event.requestId,
+        responseCode: event.responseStatusCode,
+        responsePhrase: event.responsePhrase,
+        responseHeaders: responseHeadersForBody(event.responseHeaders),
+        body: encodeBase64Utf8(mutatedBody),
+      });
+    } catch (error) {
+      console.warn("FaultLab could not fulfill the mutated response", error);
+      await continueResponse();
+    }
+  }
+
+  private clearPendingTimeouts(): void {
+    for (const timeout of this.pendingTimeouts) clearTimeout(timeout);
+    this.pendingTimeouts.clear();
+  }
+}
+
+function responseHeadersForBody(
+  headers: ResponseHeader[] | undefined,
+): ResponseHeader[] {
+  const filtered = (headers ?? []).filter(
+    ({ name }) =>
+      !["content-encoding", "content-length", "transfer-encoding"].includes(
+        name.toLowerCase(),
+      ),
+  );
+  if (!filtered.some(({ name }) => name.toLowerCase() === "content-type")) {
+    filtered.push({ name: "Content-Type", value: "application/json" });
+  }
+  return filtered;
+}
+
+function decodeBase64Utf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function encodeBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function normalizeEndpoint(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return value || undefined;
+  }
+}
