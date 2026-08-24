@@ -4,6 +4,7 @@ import {
   validateScenario,
   type RecordedEvent,
   type RecordedRequest,
+  type DetectedIssue,
   type RuntimeMessage,
   type RuntimeState,
 } from "@faultlab/core";
@@ -36,10 +37,24 @@ async function getState(): Promise<RuntimeState> {
         ? storedRecorder.events
         : [],
     };
+    const storedErrorMonitor = storedState.errorMonitor ?? {};
+    const normalizedErrorMonitor = {
+      active:
+        storedErrorMonitor.active === true &&
+        typeof storedErrorMonitor.tabId === "number",
+      tabId:
+        typeof storedErrorMonitor.tabId === "number"
+          ? storedErrorMonitor.tabId
+          : null,
+      issues: Array.isArray(storedErrorMonitor.issues)
+        ? storedErrorMonitor.issues
+        : ([] as DetectedIssue[]),
+    };
     networkAdapter.restoreRecordedRequests(
       normalizedRecorder.requests,
       normalizedRecorder.events,
     );
+    networkAdapter.restoreDetectedIssues(normalizedErrorMonitor.issues);
     const liveRequests = networkAdapter.getRecordedRequests();
     const recorder = normalizedRecorder.active
       ? {
@@ -62,11 +77,17 @@ async function getState(): Promise<RuntimeState> {
           scenario.builtIn === storedState.scenarios[index].builtIn,
       )
     )
-      return { ...storedState, scenarios: migratedScenarios, recorder };
+      return {
+        ...storedState,
+        scenarios: migratedScenarios,
+        recorder,
+        errorMonitor: normalizedErrorMonitor,
+      };
     const migratedState = {
       ...storedState,
       scenarios: [...migratedScenarios, ...missingDefaults],
       recorder,
+      errorMonitor: normalizedErrorMonitor,
     };
     await chrome.storage.local.set({ [KEY]: migratedState });
     return migratedState;
@@ -76,6 +97,7 @@ async function getState(): Promise<RuntimeState> {
     activeScenarioId: null,
     scenarios: defaultScenarios,
     recorder: { active: false, tabId: null, requests: [], events: [] },
+    errorMonitor: { active: false, tabId: null, issues: [] },
   };
   await chrome.storage.local.set({ [KEY]: state });
   return state;
@@ -85,13 +107,18 @@ async function syncNetwork(state: RuntimeState, tabId?: number): Promise<void> {
   const scenario = state.scenarios.find(
     (candidate) => candidate.id === state.activeScenarioId,
   );
-  if ((!state.enabled || !scenario) && !state.recorder.active) {
+  if (
+    (!state.enabled || !scenario) &&
+    !state.recorder.active &&
+    !state.errorMonitor.active
+  ) {
     await networkAdapter.stop();
     return;
   }
 
   const activeTabId =
     (state.recorder.active ? state.recorder.tabId : null) ??
+    (state.errorMonitor.active ? state.errorMonitor.tabId : null) ??
     tabId ??
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (activeTabId == null) {
@@ -103,6 +130,7 @@ async function syncNetwork(state: RuntimeState, tabId?: number): Promise<void> {
     activeTabId,
     scenario?.rules ?? [],
     state.recorder.active,
+    state.errorMonitor.active,
   );
 }
 
@@ -141,7 +169,20 @@ chrome.runtime.onMessage.addListener(
     const typedMessage = message as RuntimeMessage;
     const operation = stateOperation.then(async () => {
       const state = await getState();
-      if (typedMessage.type === "GET_STATE") return { ok: true, state };
+      if (typedMessage.type === "GET_STATE") {
+        if (state.errorMonitor.active) {
+          await syncNetwork(state);
+          const liveState = {
+            ...state,
+            errorMonitor: {
+              ...state.errorMonitor,
+              issues: networkAdapter.getDetectedIssues(),
+            },
+          };
+          return { ok: true, state: liveState };
+        }
+        return { ok: true, state };
+      }
       if (typedMessage.type === "GET_DISCOVERED_DATA") {
         return { ok: true, discovered: networkAdapter.getDiscoveredData() };
       }
@@ -158,6 +199,27 @@ chrome.runtime.onMessage.addListener(
             ...state.recorder,
             requests: networkAdapter.getRecordedRequests(),
             events: networkAdapter.getRecordedEvents(),
+          },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "REPORT_ISSUE") {
+        const tabId = sender.tab?.id;
+        if (!state.errorMonitor.active || tabId == null) {
+          return { ok: false, error: "Error monitoring is not active" };
+        }
+        if (tabId !== state.errorMonitor.tabId) {
+          return { ok: false, error: "Issue came from a different tab" };
+        }
+        if (!networkAdapter.recordReportedIssue(tabId, typedMessage.issue)) {
+          return { ok: false, error: "Error monitor is not attached" };
+        }
+        const next = {
+          ...state,
+          errorMonitor: {
+            ...state.errorMonitor,
+            issues: networkAdapter.getDetectedIssues(),
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -291,6 +353,49 @@ chrome.runtime.onMessage.addListener(
           await chrome.storage.local.set({ [KEY]: recorded });
           return { ok: true, state: recorded };
         }
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "START_ERROR_MONITORING") {
+        const activeTabId =
+          (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+        if (activeTabId == null) {
+          return { ok: false, error: "No active tab to monitor" };
+        }
+        if (
+          state.recorder.active &&
+          state.recorder.tabId !== activeTabId
+        ) {
+          return { ok: false, error: "Stop recording on the other tab first" };
+        }
+        networkAdapter.clearDetectedIssues();
+        const next = {
+          ...state,
+          errorMonitor: { active: true, tabId: activeTabId, issues: [] },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        await syncNetwork(next, activeTabId);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "STOP_ERROR_MONITORING") {
+        const next = {
+          ...state,
+          errorMonitor: {
+            active: false,
+            tabId: null,
+            issues: networkAdapter.getDetectedIssues(),
+          },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        await syncNetwork(next);
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "CLEAR_DETECTED_ISSUES") {
+        networkAdapter.clearDetectedIssues();
+        const next = {
+          ...state,
+          errorMonitor: { ...state.errorMonitor, issues: [] },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
         return { ok: true, state: next };
       }
       if (typedMessage.type === "STOP_RECORDING") {

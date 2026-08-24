@@ -1,4 +1,8 @@
-import type { RecordedEvent, RuntimeMessage } from "@faultlab/core";
+import type {
+	RecordedEvent,
+	ReportedIssue,
+	RuntimeMessage,
+} from "@faultlab/core";
 
 let lastUrl = location.href;
 type RecordedEventInput =
@@ -15,6 +19,28 @@ function sendEvent(event: RecordedEventInput): void {
 		} as RecordedEvent,
 	};
 	void chrome.runtime.sendMessage(message).catch(() => undefined);
+}
+
+function reportIssue(issue: Omit<ReportedIssue, "id" | "timestamp">): void {
+	const message: RuntimeMessage = {
+		type: "REPORT_ISSUE",
+		issue: {
+			...issue,
+			id: `issue-${crypto.randomUUID()}`,
+			timestamp: Date.now(),
+		},
+	};
+	void chrome.runtime.sendMessage(message).catch(() => undefined);
+}
+
+function describeReason(reason: unknown): string {
+	if (reason instanceof Error) return reason.message || reason.name;
+	if (typeof reason === "string") return reason;
+	try {
+		return JSON.stringify(reason) || "Unhandled promise rejection";
+	} catch {
+		return "Unhandled promise rejection";
+	}
 }
 
 function describeTarget(element: HTMLElement): string {
@@ -58,3 +84,19 @@ document.addEventListener(
 	true,
 );
 window.setInterval(recordNavigation, 1000);
+window.addEventListener("error", (event) => {
+	reportIssue({
+		type: "runtime",
+		message: event.message || "Uncaught error",
+		source: event.filename || location.href,
+		url: location.href,
+	});
+});
+window.addEventListener("unhandledrejection", (event) => {
+	reportIssue({
+		type: "unhandledrejection",
+		message: describeReason(event.reason),
+		source: location.href,
+		url: location.href,
+	});
+});

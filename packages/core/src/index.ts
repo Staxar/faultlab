@@ -67,6 +67,19 @@ export type RecordedEvent =
       target: string;
     };
 
+export type DetectedIssue = {
+  id: string;
+  timestamp: number;
+  tabId: number;
+  type: "console" | "network" | "runtime" | "unhandledrejection";
+  message: string;
+  source?: string;
+  url?: string;
+  status?: number;
+};
+
+export type ReportedIssue = Omit<DetectedIssue, "tabId">;
+
 export interface RuntimeState {
   enabled: boolean;
   activeScenarioId: string | null;
@@ -76,6 +89,11 @@ export interface RuntimeState {
     tabId: number | null;
     requests: RecordedRequest[];
     events: RecordedEvent[];
+  };
+  errorMonitor: {
+    active: boolean;
+    tabId: number | null;
+    issues: DetectedIssue[];
   };
 }
 
@@ -107,7 +125,11 @@ export type RuntimeMessage =
       name: string;
       requestIds: string[];
     }
-  | { type: "RECORD_EVENT"; event: RecordedEvent };
+  | { type: "RECORD_EVENT"; event: RecordedEvent }
+  | { type: "REPORT_ISSUE"; issue: ReportedIssue }
+  | { type: "START_ERROR_MONITORING" }
+  | { type: "STOP_ERROR_MONITORING" }
+  | { type: "CLEAR_DETECTED_ISSUES" };
 
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";
