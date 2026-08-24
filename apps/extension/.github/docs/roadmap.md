@@ -89,9 +89,9 @@ Monitor locally:
 - runtime errors;
 - unhandled promise rejections.
 
-The Side Panel can start, stop, and clear monitoring for the selected tab. It keeps up to 500 issues in
-`faultlab.runtime` and displays the latest entries. Error grouping, filtering, export, and historical
-reports remain future work.
+The Side Panel can start, stop, and clear monitoring for the selected tab. It keeps up to 500 issues and
+500 injections in `faultlab.runtime`, displays grouped findings, and shows matching scenario/rule context
+when available. Filtering, export, and historical reports remain future work.
 
 ## Immediate Stabilization
 
@@ -105,9 +105,13 @@ The current stabilization branch addresses runtime correctness before adding mor
 
 ## Next Product Slice - Error Observatory
 
-After stabilization, correlate an injected rule, request, and application issue into one local
-investigation. Show grouped findings in the Side Panel and add redacted JSON/Markdown export. Do not add
-server sync, AI, Jira, GitHub, or PDF export in this slice.
+Status: first local correlation slice implemented in the `feature/error-observatory` branch.
+
+The Side Panel groups repeated issues into local findings and correlates an issue with the latest matching
+injection context when available: scenario, rule, action, request, and timestamp. Response bodies, request
+bodies, and form values are not stored. Remaining work: explicit investigation sessions, better request
+identity across CDP domains, filters, and redacted JSON/Markdown export. Do not add server sync, AI, Jira,
+GitHub, or PDF export in this slice.
 
 ## MVP 1.0
 

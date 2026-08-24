@@ -4,47 +4,14 @@ FaultLab consists of seven primary modules.
 
 ## Network Chaos
 
-Implemented today: tab-level latency/bandwidth emulation, request delay, offline failure, and HTTP error
-responses. Packet loss, random latency, and richer network presets are planned.
-
-Implemented today:
-
-- tab-level latency and bandwidth throttling;
-- per-request delay;
-- offline failure;
-- selected HTTP error responses.
-
-Planned:
-
-- Offline
-- Slow 3G
-- Slow 4G
-- High latency
-- Random latency
-- Packet loss
+Implemented today: tab-level latency and bandwidth throttling, per-request delay, offline failure, and
+selected HTTP error responses. Packet loss, random latency, and richer network presets are planned.
 
 ## API Chaos
 
 Implemented today: request-stage delay, offline failure, selected HTTP error responses, and response-stage
 JSON mutation. Timeout, weighted random outcomes, custom response bodies, and one-click request breaking
 are planned.
-
-Implemented today:
-
-- request-stage delay and failure injection;
-- response-stage JSON mutation.
-
-Planned:
-
-- 500
-- 404
-- 401
-- 403
-- 429
-- 503
-- timeout;
-- weighted random outcomes;
-- packet loss;
 
 ## Data Chaos
 
@@ -97,4 +64,5 @@ future work.
 
 The first monitoring slice collects console errors, failed network requests, runtime exceptions, and unhandled Promise rejections locally for the selected tab. The Side Panel shows the latest issues and supports clearing the local list.
 
-Grouping, failure correlation, DOM/performance detection, Auto Chaos, and reports are planned.
+Grouping and failure correlation are available in the current development slice. DOM/performance detection,
+export, Auto Chaos, and full reports are planned.
