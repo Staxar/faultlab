@@ -4,6 +4,7 @@ import type {
   JsonMutation,
   RequestMatcher,
   RuleAction,
+  RecordedRequest,
   RuntimeMessage,
   RuntimeState,
   Scenario,
@@ -14,6 +15,7 @@ const empty: RuntimeState = {
   enabled: false,
   activeScenarioId: null,
   scenarios: [],
+  recorder: { active: false, requests: [] },
 };
 type RuntimeResponse = {
   ok: boolean;
@@ -109,6 +111,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Scenario | null>(null);
+  const [selectedRecordings, setSelectedRecordings] = useState<Set<string>>(
+    new Set(),
+  );
   const [discoveredData, setDiscoveredData] = useState<RuntimeResponse["discovered"]>({
     urls: [],
     graphqlOperations: [],
@@ -138,6 +143,15 @@ function App() {
       mounted = false;
     };
   }, []);
+  useEffect(() => {
+    if (!state.recorder.active) return;
+    const interval = window.setInterval(() => {
+      void send({ type: "GET_STATE" }).then((response) => {
+        if (response.state) setState(response.state);
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [state.recorder.active]);
   useEffect(() => {
     if (!draft) return;
     let mounted = true;
@@ -173,6 +187,42 @@ function App() {
           : "FaultLab could not apply the change",
       );
       return false;
+    }
+  };
+  const toggleRecordingSelection = (requestId: string) =>
+    setSelectedRecordings((current) => {
+      const next = new Set(current);
+      if (next.has(requestId)) next.delete(requestId);
+      else next.add(requestId);
+      return next;
+    });
+  const startRecording = async () => {
+    setSelectedRecordings(new Set());
+    await refresh({ type: "START_RECORDING" });
+  };
+  const stopRecording = async () => {
+    await refresh({ type: "STOP_RECORDING" });
+  };
+  const clearRecording = async () => {
+    setSelectedRecordings(new Set());
+    await refresh({ type: "CLEAR_RECORDING" });
+  };
+  const createFromRecording = async () => {
+    const requestIds = [...selectedRecordings];
+    if (requestIds.length === 0) {
+      setError("Select at least one recorded request");
+      return;
+    }
+    const name = window.prompt("Scenario name", "Recorded scenario");
+    if (name == null) return;
+    if (
+      await refresh({
+        type: "CREATE_SCENARIO_FROM_RECORDING",
+        name,
+        requestIds,
+      })
+    ) {
+      setSelectedRecordings(new Set());
     }
   };
   const updateDraft = (update: (scenario: Scenario) => Scenario) =>
@@ -322,6 +372,50 @@ function App() {
             : "Fault injection disabled"}
       </div>
       {error && <div className="error">{error}</div>}
+      <section className="recorder-panel">
+        <div className="section-heading">
+          <small>RECORDER</small>
+          <span className={state.recorder.active ? "recording-dot" : "field-hint"}>
+            {state.recorder.active ? "Recording" : `${state.recorder.requests.length} observed`}
+          </span>
+        </div>
+        <div className="recorder-actions">
+          {state.recorder.active ? (
+            <button className="primary" type="button" onClick={() => void stopRecording()}>
+              Stop recording
+            </button>
+          ) : (
+            <button className="secondary" disabled={loading} type="button" onClick={() => void startRecording()}>
+              Start recording
+            </button>
+          )}
+          <button className="secondary" disabled={loading || state.recorder.requests.length === 0} type="button" onClick={() => void clearRecording()}>
+            Clear
+          </button>
+        </div>
+        {state.recorder.requests.length > 0 && (
+          <>
+            <div className="recorded-list">
+              {state.recorder.requests.slice(-25).map((request: RecordedRequest) => (
+                <label className="recorded-request" key={request.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedRecordings.has(request.id)}
+                    onChange={() => toggleRecordingSelection(request.id)}
+                  />
+                  <span>
+                    <b>{request.method} {request.url}</b>
+                    <em>{[request.resourceType, request.graphqlOperationName].filter(Boolean).join(" · ") || "request"}</em>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <button className="secondary create-recorded" disabled={loading || selectedRecordings.size === 0} type="button" onClick={() => void createFromRecording()}>
+              Create scenario from selected
+            </button>
+          </>
+        )}
+      </section>
       <div className="section-heading">
         <small>QUICK CHAOS</small>
         <button className="secondary add-scenario" disabled={loading} onClick={openNewEditor}>
