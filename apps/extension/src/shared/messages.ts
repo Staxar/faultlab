@@ -75,6 +75,29 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
       typeof event.target === "string"
     );
   }
+  if (candidate.type === "REPORT_ISSUE") {
+    const issueCandidate = candidate as { issue?: Record<string, unknown> };
+    const issue = issueCandidate.issue;
+    if (
+      !issue ||
+      typeof issue.id !== "string" ||
+      typeof issue.timestamp !== "number" ||
+      !Number.isFinite(issue.timestamp) ||
+      typeof issue.message !== "string"
+    ) {
+      return false;
+    }
+    return (
+      issue.type === "runtime" || issue.type === "unhandledrejection"
+    );
+  }
+  if (
+    candidate.type === "START_ERROR_MONITORING" ||
+    candidate.type === "STOP_ERROR_MONITORING" ||
+    candidate.type === "CLEAR_DETECTED_ISSUES"
+  ) {
+    return true;
+  }
   return (
     candidate.type === "ACTIVATE_SCENARIO" &&
     typeof candidate.scenarioId === "string"

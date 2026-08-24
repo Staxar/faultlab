@@ -5,6 +5,7 @@ import {
   matchesRule,
   shouldApply,
   type FaultRule,
+  type DetectedIssue,
   type RecordedEvent,
   type RecordedRequest,
 } from "@faultlab/core";
@@ -12,6 +13,7 @@ import {
 const MAX_MUTATION_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_RECORDED_REQUESTS = 500;
 const MAX_RECORDED_EVENTS = 500;
+const MAX_DETECTED_ISSUES = 500;
 
 type ResponseHeader = { name: string; value: string };
 
@@ -42,17 +44,29 @@ export class ChromeNetworkAdapter {
   private recordedRequestIds = new Set<string>();
   private recordedEvents: RecordedEvent[] = [];
   private restoredRecordedRequests = false;
+  private monitoring = false;
+  private detectedIssues: DetectedIssue[] = [];
+  private restoredDetectedIssues = false;
 
   constructor() {
     chrome.debugger.onEvent.addListener((source, method, params) => {
-      if (method !== "Fetch.requestPaused" || source.tabId == null) return;
-      void this.handleRequest(source.tabId, params as RequestPausedEvent);
+      if (source.tabId == null) return;
+      if (method === "Fetch.requestPaused") {
+        void this.handleRequest(source.tabId, params as RequestPausedEvent);
+      } else if (method === "Runtime.consoleAPICalled") {
+        this.handleConsoleIssue(source.tabId, params as Record<string, unknown>);
+      } else if (method === "Runtime.exceptionThrown") {
+        this.handleRuntimeIssue(source.tabId, params as Record<string, unknown>);
+      } else if (method === "Network.loadingFailed") {
+        this.handleNetworkIssue(source.tabId, params as Record<string, unknown>);
+      }
     });
 
     chrome.debugger.onDetach.addListener((source) => {
       if (source.tabId === this.attachedTabId) {
         this.attachedTabId = null;
         this.rules = [];
+        this.monitoring = false;
         this.clearPendingTimeouts();
       }
     });
@@ -62,9 +76,10 @@ export class ChromeNetworkAdapter {
     tabId: number,
     rules: FaultRule[],
     recording = false,
+    monitoring = false,
   ): Promise<void> {
     const operation = this.operation.then(() =>
-      this.applyRulesNow(tabId, rules, recording),
+      this.applyRulesNow(tabId, rules, recording, monitoring),
     );
     this.operation = operation.then(
       () => undefined,
@@ -94,10 +109,24 @@ export class ChromeNetworkAdapter {
     return [...this.recordedEvents];
   }
 
+  getDetectedIssues(): DetectedIssue[] {
+    return [...this.detectedIssues];
+  }
+
   clearRecordedRequests(): void {
     this.recordedRequests = [];
     this.recordedRequestIds.clear();
     this.recordedEvents = [];
+  }
+
+  clearDetectedIssues(): void {
+    this.detectedIssues = [];
+  }
+
+  restoreDetectedIssues(issues: DetectedIssue[]): void {
+    if (this.restoredDetectedIssues) return;
+    this.restoredDetectedIssues = true;
+    this.detectedIssues = issues.slice(-MAX_DETECTED_ISSUES);
   }
 
   restoreRecordedRequests(
@@ -118,6 +147,18 @@ export class ChromeNetworkAdapter {
     this.recordedEvents.push(event);
     if (this.recordedEvents.length > MAX_RECORDED_EVENTS) {
       this.recordedEvents.shift();
+    }
+    return true;
+  }
+
+  recordReportedIssue(
+    tabId: number,
+    issue: Omit<DetectedIssue, "tabId">,
+  ): boolean {
+    if (!this.monitoring || this.attachedTabId !== tabId) return false;
+    this.detectedIssues.push({ ...issue, tabId });
+    if (this.detectedIssues.length > MAX_DETECTED_ISSUES) {
+      this.detectedIssues.shift();
     }
     return true;
   }
@@ -145,6 +186,7 @@ export class ChromeNetworkAdapter {
     tabId: number,
     rules: FaultRule[],
     recording: boolean,
+    monitoring: boolean,
   ): Promise<void> {
     if (this.attachedTabId !== tabId) {
       await this.stopNow();
@@ -191,6 +233,11 @@ export class ChromeNetworkAdapter {
       );
       this.applicationCounts.clear();
       this.recording = recording;
+      this.monitoring = monitoring;
+      if (monitoring) {
+        await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
+        await chrome.debugger.sendCommand({ tabId }, "Network.enable");
+      }
       this.rules = rules;
     } catch (error) {
       await this.stopNow();
@@ -202,6 +249,7 @@ export class ChromeNetworkAdapter {
   private async stopNow(): Promise<void> {
     this.rules = [];
     this.recording = false;
+    this.monitoring = false;
     this.applicationCounts.clear();
     this.clearPendingTimeouts();
     if (this.attachedTabId == null) return;
@@ -427,6 +475,83 @@ export class ChromeNetworkAdapter {
   private clearPendingTimeouts(): void {
     for (const timeout of this.pendingTimeouts) clearTimeout(timeout);
     this.pendingTimeouts.clear();
+  }
+
+  private handleConsoleIssue(
+    tabId: number,
+    params: Record<string, unknown>,
+  ): void {
+    if (params.type !== "error") return;
+    const args = Array.isArray(params.args) ? params.args : [];
+    const message = args
+      .map((argument) => {
+        if (!argument || typeof argument !== "object") return "";
+        const value = argument as { description?: unknown; value?: unknown };
+        if (typeof value.description === "string") return value.description;
+        return typeof value.value === "string" ? value.value : "";
+      })
+      .filter(Boolean)
+      .join(" ");
+    this.recordDetectedIssue(tabId, {
+      type: "console",
+      message: message || "Console error",
+      source: this.stackSource(params.stackTrace),
+    });
+  }
+
+  private handleRuntimeIssue(
+    tabId: number,
+    params: Record<string, unknown>,
+  ): void {
+    const details = (params.exceptionDetails ?? {}) as Record<string, unknown>;
+    const exception = (details.exception ?? {}) as Record<string, unknown>;
+    const message =
+      (typeof details.text === "string" && details.text) ||
+      (typeof exception.description === "string" && exception.description) ||
+      "Runtime exception";
+    this.recordDetectedIssue(tabId, {
+      type: "runtime",
+      message,
+      source:
+        typeof details.url === "string" ? details.url : undefined,
+    });
+  }
+
+  private handleNetworkIssue(
+    tabId: number,
+    params: Record<string, unknown>,
+  ): void {
+    const errorText =
+      typeof params.errorText === "string" ? params.errorText : "Unknown network error";
+    const requestId =
+      typeof params.requestId === "string" ? params.requestId : undefined;
+    this.recordDetectedIssue(tabId, {
+      type: "network",
+      message: `Network request failed: ${errorText}`,
+      source: requestId ? `request ${requestId}` : undefined,
+    });
+  }
+
+  private stackSource(stackTrace: unknown): string | undefined {
+    const trace = stackTrace as { callFrames?: Array<{ url?: unknown }> } | undefined;
+    const url = trace?.callFrames?.[0]?.url;
+    return typeof url === "string" && url ? url : undefined;
+  }
+
+  private recordDetectedIssue(
+    tabId: number,
+    issue: Omit<DetectedIssue, "id" | "timestamp" | "tabId">,
+  ): void {
+    if (!this.monitoring || this.attachedTabId !== tabId) return;
+    this.detectedIssues.push({
+      ...issue,
+      id: `issue-${crypto.randomUUID()}`,
+      timestamp: Date.now(),
+      tabId,
+    });
+    if (this.detectedIssues.length > MAX_DETECTED_ISSUES) {
+      this.detectedIssues.shift();
+    }
   }
 
   private hasRemainingApplications(rule: FaultRule): boolean {

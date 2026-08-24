@@ -79,6 +79,64 @@ h1 {
   padding: 11px;
   margin: 10px 0 20px;
 }
+.issues-panel {
+  border: 1px solid #2c2e36;
+  border-radius: 10px;
+  background: #15171b;
+  padding: 11px;
+  margin: 10px 0 20px;
+}
+.issues-panel .section-heading {
+  margin-top: 0;
+}
+.issue-hint {
+  display: block;
+  margin-top: 9px;
+}
+.issues-list {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #272930;
+}
+.issue-row {
+  min-width: 0;
+  border-left: 2px solid #d65b32;
+  padding: 5px 0 5px 8px;
+  color: #c8cad1;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.issue-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  margin-bottom: 2px;
+}
+.issue-meta b {
+  color: #ffb095;
+  font-size: 10px;
+}
+.issue-meta time {
+  color: #858894;
+  font-variant-numeric: tabular-nums;
+}
+.issue-row > span,
+.issue-row > em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-row > em {
+  margin-top: 2px;
+  color: #858894;
+  font-size: 9px;
+  font-style: normal;
+}
 .recorder-panel .section-heading {
   margin-top: 0;
 }

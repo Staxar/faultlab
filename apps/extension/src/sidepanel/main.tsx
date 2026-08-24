@@ -4,6 +4,7 @@ import type {
   JsonMutation,
   RequestMatcher,
   RuleAction,
+  DetectedIssue,
   RecordedEvent,
   RecordedRequest,
   RuntimeMessage,
@@ -17,6 +18,7 @@ const empty: RuntimeState = {
   activeScenarioId: null,
   scenarios: [],
   recorder: { active: false, tabId: null, requests: [], events: [] },
+  errorMonitor: { active: false, tabId: null, issues: [] },
 };
 type RuntimeResponse = {
   ok: boolean;
@@ -110,6 +112,13 @@ function describeRecordedEvent(event: RecordedEvent): string {
   return `${event.action === "click" ? "Clicked" : "Changed"} ${event.target}`;
 }
 
+function issueLabel(issue: DetectedIssue): string {
+  if (issue.type === "unhandledrejection") return "Promise rejection";
+  if (issue.type === "runtime") return "Runtime error";
+  if (issue.type === "console") return "Console error";
+  return "Network failure";
+}
+
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
   chrome.runtime.sendMessage(message);
 function App() {
@@ -158,6 +167,15 @@ function App() {
     }, 1000);
     return () => window.clearInterval(interval);
   }, [state.recorder.active]);
+  useEffect(() => {
+    if (!state.errorMonitor.active) return;
+    const interval = window.setInterval(() => {
+      void send({ type: "GET_STATE" }).then((response) => {
+        if (response.state) setState(response.state);
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [state.errorMonitor.active]);
   useEffect(() => {
     if (!draft) return;
     let mounted = true;
@@ -212,6 +230,15 @@ function App() {
   const clearRecording = async () => {
     setSelectedRecordings(new Set());
     await refresh({ type: "CLEAR_RECORDING" });
+  };
+  const startErrorMonitoring = async () => {
+    await refresh({ type: "START_ERROR_MONITORING" });
+  };
+  const stopErrorMonitoring = async () => {
+    await refresh({ type: "STOP_ERROR_MONITORING" });
+  };
+  const clearDetectedIssues = async () => {
+    await refresh({ type: "CLEAR_DETECTED_ISSUES" });
   };
   const createFromRecording = async () => {
     const requestIds = [...selectedRecordings];
@@ -428,6 +455,47 @@ function App() {
               <div className="recorded-event" key={event.id}>
                 <time>{new Date(event.timestamp).toLocaleTimeString()}</time>
                 <span>{describeRecordedEvent(event)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="issues-panel">
+        <div className="section-heading">
+          <small>ERROR DETECTION</small>
+          <span className={state.errorMonitor.active ? "recording-dot" : "field-hint"}>
+            {state.errorMonitor.active
+              ? "Monitoring"
+              : `${state.errorMonitor.issues.length} found`}
+          </span>
+        </div>
+        <div className="recorder-actions">
+          {state.errorMonitor.active ? (
+            <button className="primary" type="button" onClick={() => void stopErrorMonitoring()}>
+              Stop monitoring
+            </button>
+          ) : (
+            <button className="secondary" disabled={loading} type="button" onClick={() => void startErrorMonitoring()}>
+              Start monitoring
+            </button>
+          )}
+          <button className="secondary" disabled={loading || state.errorMonitor.issues.length === 0} type="button" onClick={() => void clearDetectedIssues()}>
+            Clear
+          </button>
+        </div>
+        <span className="field-hint issue-hint">
+          Console, runtime, Promise, and network failures stay local to this browser.
+        </span>
+        {state.errorMonitor.issues.length > 0 && (
+          <div className="issues-list">
+            {state.errorMonitor.issues.slice(-30).reverse().map((issue) => (
+              <div className="issue-row" key={issue.id}>
+                <div className="issue-meta">
+                  <b>{issueLabel(issue)}</b>
+                  <time>{new Date(issue.timestamp).toLocaleTimeString()}</time>
+                </div>
+                <span>{issue.message}</span>
+                {issue.source && <em>{issue.source}</em>}
               </div>
             ))}
           </div>
