@@ -1,6 +1,6 @@
 # Scenarios
 
-The current release exposes built-in presets in the Side Panel. The first MVP 0.3 slice now makes their rules configurable and stores edits locally. Simple custom scenarios remain the next 0.3 slice. Sections explicitly marked "MVP 0.3" describe the target behavior for the remaining builder work.
+The `0.1.0` release exposes built-in presets in the Side Panel. The `0.2.0` development builder makes their rules configurable and also supports local custom scenarios with one or more rules. Sections explicitly marked "MVP 0.3" describe the remaining builder work.
 
 ## Common Rule Controls
 
@@ -72,6 +72,10 @@ Available in MVP 0.2 as a demonstration preset and configurable in the first MVP
 
 After activating the scenario, refresh the target page. The adapter reads names from the request `operationName` or from named GraphQL definitions such as `query SearchResultItemV2(...)`, and parses JSON response fields into a selectable path list. The observed operation names and paths become available in the editor selects. A wildcard path applies the mutation to every matching array item. MVP 0.3 mutation authoring supports `remove`, `nullify`, `empty_array`, and `type_mismatch` only.
 
+## Custom Scenarios
+
+Custom scenarios can be created from the Side Panel with one or more rules. Each custom scenario supports the same matcher and action controls as the built-in presets, is stored under `faultlab.runtime`, and can be edited or deleted. Built-in scenarios cannot be deleted or converted into custom scenarios. Deleting the active custom scenario deactivates network interception first.
+
 ## Future Examples
 
 These examples are useful acceptance scenarios for the builder, but are not built-in presets in the current MVP:
@@ -93,4 +97,4 @@ These examples are useful acceptance scenarios for the builder, but are not buil
 
 ## Configuration Safety
 
-Every setting needs a default and bounded validation. A scenario cannot be saved without at least one valid rule. Resetting a built-in preset restores its safe defaults. Configuration remains local to the extension and applies to the selected tab; multi-tab coordination and sharing are later work.
+Every setting needs a default and bounded validation. A scenario cannot be saved without at least one valid rule. Resetting a built-in preset restores its safe defaults. Configuration remains local to the extension and applies to the selected tab; application limits, broad-matcher confirmation, multi-tab coordination, and sharing are later work.

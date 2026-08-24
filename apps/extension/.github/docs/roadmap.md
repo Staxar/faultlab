@@ -40,7 +40,7 @@ Out of scope for 0.2 and the `0.1.0` release: request-body mutation, headers as 
 
 ## MVP 0.3 - Scenario Builder
 
-Status: partially complete; the current slice is included in `0.1.0`.
+Status: substantially complete; built-in editing and discovery shipped in `0.1.0`, while custom scenario CRUD is implemented in the unreleased `0.2.0` development version.
 
 The first 0.3 slice is configuration of the existing presets, followed by creation and persistence of custom scenarios. It should remain a small Side Panel workflow rather than a full rule-authoring platform.
 
@@ -50,9 +50,9 @@ Milestones:
 2. Select request scope with literal URL substring, HTTP method, resource type, or an observed GraphQL operation name.
 3. Configure probability and action parameters with bounded validation.
 4. Add optional per-activation application limits.
-5. Add custom scenarios with one or more rules, local persistence, and safe reset/delete behavior.
+5. Add custom scenarios with one or more rules, local persistence, and safe delete behavior. Implemented: create, edit, add/remove rules, and delete custom scenarios.
 
-The current implementation edits existing built-in scenarios, discovers GraphQL operation names after page reload, and stores updated scenarios under `faultlab.runtime`. Custom scenario CRUD, application limits, and built-in/custom separation remain for the next 0.3 slice.
+The current implementation edits existing built-in scenarios, discovers GraphQL operation names after page reload, and stores updated scenarios under `faultlab.runtime`. Custom scenarios are separated from built-ins and can be created, edited, and deleted locally in the `0.2.0` development version. Application limits and explicit broad-matcher confirmation remain for the next 0.3 slice.
 
 Completion criteria:
 
