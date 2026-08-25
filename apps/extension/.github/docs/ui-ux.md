@@ -72,6 +72,9 @@ available, show the scenario, rule action, and request context below the issue m
 list local and bounded; do not display request or response bodies in this view. A missing correlation must
 be represented as missing context, not as a guessed scenario.
 
+The findings filter supports all findings, correlated injections, or one issue source type. Filtering only
+changes the view and never deletes the underlying local issue history.
+
 ## Investigation Notes and Export
 
 Allow the user to add a short note, optionally capture the visible selected tab, and review the evidence

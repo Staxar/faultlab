@@ -58,6 +58,7 @@ const ACTION_TYPES: RuleAction["type"][] = [
   "offline",
   "mutate",
 ];
+type FindingFilter = "all" | DetectedIssue["type"] | "correlated";
 
 function createAction(type: RuleAction["type"]): RuleAction {
   if (type === "error") return { type, status: 500, probability: 1 };
@@ -162,6 +163,7 @@ function App() {
   const [pendingScreenshot, setPendingScreenshot] = useState<string | null>(
     null,
   );
+  const [findingFilter, setFindingFilter] = useState<FindingFilter>("all");
   const [discoveredData, setDiscoveredData] = useState<
     RuntimeResponse["discovered"]
   >({
@@ -170,6 +172,11 @@ function App() {
     jsonPaths: [],
   });
   const findings = groupDetectedIssues(state.errorMonitor.issues);
+  const visibleFindings = findings.filter((finding) => {
+    if (findingFilter === "all") return true;
+    if (findingFilter === "correlated") return finding.injectionId !== undefined;
+    return finding.type === findingFilter;
+  });
   useEffect(() => {
     let mounted = true;
     void send({ type: "GET_STATE" })
@@ -645,6 +652,22 @@ function App() {
               : `${findings.length} findings`}
           </span>
         </div>
+        <label className="issue-filter">
+          View findings
+          <select
+            value={findingFilter}
+            onChange={(event) =>
+              setFindingFilter(event.target.value as FindingFilter)
+            }
+          >
+            <option value="all">All findings ({findings.length})</option>
+            <option value="correlated">Correlated injections</option>
+            <option value="console">Console errors</option>
+            <option value="network">Network failures</option>
+            <option value="runtime">Runtime errors</option>
+            <option value="unhandledrejection">Promise rejections</option>
+          </select>
+        </label>
         <div className="recorder-actions">
           {state.errorMonitor.active ? (
             <button
@@ -677,9 +700,9 @@ function App() {
           Console, runtime, Promise, and network failures stay local to this
           browser.
         </span>
-        {findings.length > 0 && (
+        {visibleFindings.length > 0 && (
           <div className="issues-list">
-            {findings.slice(0, 30).map((finding) => {
+            {visibleFindings.slice(0, 30).map((finding) => {
               const injection = finding.injectionId
                 ? state.errorMonitor.injections.find(
                     (item) => item.id === finding.injectionId,
@@ -713,6 +736,9 @@ function App() {
               );
             })}
           </div>
+        )}
+        {findings.length > 0 && visibleFindings.length === 0 && (
+          <span className="field-hint empty-filter">No findings match this filter.</span>
         )}
         <div className="observatory-actions">
           <button
