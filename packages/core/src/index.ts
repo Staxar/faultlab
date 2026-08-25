@@ -111,6 +111,66 @@ export type ErrorFinding = {
   lastSeen: number;
 };
 
+export type InvestigationNote = {
+  id: string;
+  timestamp: number;
+  body: string;
+  screenshotDataUrl?: string;
+};
+
+export type ObservatoryData = {
+  issues: DetectedIssue[];
+  injections: FaultInjection[];
+  notes: InvestigationNote[];
+};
+
+export function redactReportText(value: string): string {
+  return value
+    .replace(/([?&](?:token|access_token|authorization|password|secret|session)[^=]*=)[^&\s]*/gi, "$1[REDACTED]")
+    .replace(/\b(?:Bearer\s+)?[A-Za-z0-9_-]{24,}\b/g, "[REDACTED]");
+}
+
+export function formatObservatoryMarkdown(data: ObservatoryData): string {
+  const findings = groupDetectedIssues(data.issues);
+  const lines = [
+    "# FaultLab Error Observatory",
+    "",
+    `Generated: ${new Date().toISOString()}`,
+    "",
+    "## Findings",
+    "",
+  ];
+  if (findings.length === 0) lines.push("No findings recorded.", "");
+  for (const finding of findings) {
+    lines.push(
+      `### ${redactReportText(finding.type)} (${finding.count} occurrence${finding.count === 1 ? "" : "s"})`,
+      "",
+      redactReportText(finding.message),
+      "",
+      `- Last seen: ${new Date(finding.lastSeen).toISOString()}`,
+    );
+    if (finding.scenarioId) lines.push(`- Scenario: ${redactReportText(finding.scenarioId)}`);
+    if (finding.ruleId) lines.push(`- Rule: ${redactReportText(finding.ruleId)}`);
+    if (finding.url) lines.push(`- URL: ${redactReportText(finding.url)}`);
+    lines.push("");
+  }
+  lines.push("## Notes", "");
+  if (data.notes.length === 0) lines.push("No notes recorded.", "");
+  for (const note of data.notes) {
+    lines.push(
+      `### ${new Date(note.timestamp).toISOString()}`,
+      "",
+      redactReportText(note.body),
+      "",
+      note.screenshotDataUrl
+        ? `![Evidence screenshot](${note.screenshotDataUrl})`
+        : "",
+      "",
+    );
+  }
+  return lines.join("\n");
+}
+
 export function groupDetectedIssues(issues: DetectedIssue[]): ErrorFinding[] {
   const findings = new Map<string, ErrorFinding>();
   for (const issue of issues) {
@@ -164,6 +224,7 @@ export interface RuntimeState {
     tabId: number | null;
     issues: DetectedIssue[];
     injections: FaultInjection[];
+    notes: InvestigationNote[];
   };
 }
 
@@ -201,7 +262,10 @@ export type RuntimeMessage =
   | { type: "REPORT_ISSUE"; issue: ReportedIssue }
   | { type: "START_ERROR_MONITORING" }
   | { type: "STOP_ERROR_MONITORING" }
-  | { type: "CLEAR_DETECTED_ISSUES" };
+  | { type: "CLEAR_DETECTED_ISSUES" }
+  | { type: "CREATE_NOTE"; body: string; screenshotDataUrl?: string }
+  | { type: "DELETE_NOTE"; noteId: string }
+  | { type: "CAPTURE_SCREENSHOT" };
 
 export function validateScenario(scenario: Scenario): string | null {
   if (!scenario.id || !scenario.name.trim()) return "Scenario name is required";

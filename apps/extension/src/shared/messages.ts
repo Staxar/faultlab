@@ -107,6 +107,27 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
   ) {
     return true;
   }
+    if (candidate.type === "CAPTURE_SCREENSHOT") {
+      return true;
+    }
+    if (candidate.type === "CREATE_NOTE") {
+      const noteCandidate = candidate as {
+        body?: unknown;
+        screenshotDataUrl?: unknown;
+      };
+      return (
+        typeof noteCandidate.body === "string" &&
+        noteCandidate.body.length <= 2000 &&
+        (noteCandidate.screenshotDataUrl === undefined ||
+          (typeof noteCandidate.screenshotDataUrl === "string" &&
+            noteCandidate.screenshotDataUrl.startsWith("data:image/") &&
+            noteCandidate.screenshotDataUrl.length <= 800_000))
+      );
+    }
+    if (candidate.type === "DELETE_NOTE") {
+      const noteCandidate = candidate as { noteId?: unknown };
+      return typeof noteCandidate.noteId === "string";
+    }
   if (candidate.type === "CREATE_SCENARIO_FROM_RECORDING") {
     const recordingCandidate = candidate as {
       name?: unknown;

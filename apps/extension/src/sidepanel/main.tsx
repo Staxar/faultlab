@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { groupDetectedIssues } from "@faultlab/core";
+import {
+  formatObservatoryMarkdown,
+  groupDetectedIssues,
+} from "@faultlab/core";
 import type {
   JsonMutation,
   RequestMatcher,
@@ -19,7 +22,13 @@ const empty: RuntimeState = {
   activeScenarioId: null,
   scenarios: [],
   recorder: { active: false, tabId: null, requests: [], events: [] },
-  errorMonitor: { active: false, tabId: null, issues: [], injections: [] },
+  errorMonitor: {
+    active: false,
+    tabId: null,
+    issues: [],
+    injections: [],
+    notes: [],
+  },
 };
 type RuntimeResponse = {
   ok: boolean;
@@ -29,6 +38,7 @@ type RuntimeResponse = {
     graphqlOperations: string[];
     jsonPaths: string[];
   };
+  screenshotDataUrl?: string;
   error?: string;
 };
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
@@ -128,6 +138,16 @@ function issueTypeLabel(type: DetectedIssue["type"]): string {
   return issueLabel({ type } as DetectedIssue);
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"]/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[
+        character
+      ] ?? character,
+  );
+}
+
 const send = (message: RuntimeMessage): Promise<RuntimeResponse> =>
   chrome.runtime.sendMessage(message);
 function App() {
@@ -137,6 +157,10 @@ function App() {
   const [draft, setDraft] = useState<Scenario | null>(null);
   const [selectedRecordings, setSelectedRecordings] = useState<Set<string>>(
     new Set(),
+  );
+  const [noteBody, setNoteBody] = useState("");
+  const [pendingScreenshot, setPendingScreenshot] = useState<string | null>(
+    null,
   );
   const [discoveredData, setDiscoveredData] = useState<
     RuntimeResponse["discovered"]
@@ -271,6 +295,78 @@ function App() {
   };
   const clearDetectedIssues = async () => {
     await refresh({ type: "CLEAR_DETECTED_ISSUES" });
+  };
+  const captureScreenshot = async () => {
+    setError(null);
+    try {
+      const response = await send({ type: "CAPTURE_SCREENSHOT" });
+      if (response.screenshotDataUrl) {
+        setPendingScreenshot(response.screenshotDataUrl);
+      } else if (!response.ok) {
+        setError(response.error ?? "Could not capture screenshot");
+      }
+    } catch (reason: unknown) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not capture screenshot",
+      );
+    }
+  };
+  const createNote = async () => {
+    if (!noteBody.trim() && !pendingScreenshot) {
+      setError("Add a note or capture a screenshot first");
+      return;
+    }
+    if (
+      await refresh({
+        type: "CREATE_NOTE",
+        body: noteBody,
+        ...(pendingScreenshot ? { screenshotDataUrl: pendingScreenshot } : {}),
+      })
+    ) {
+      setNoteBody("");
+      setPendingScreenshot(null);
+    }
+  };
+  const deleteNote = async (noteId: string) => {
+    await refresh({ type: "DELETE_NOTE", noteId });
+  };
+  const exportMarkdown = () => {
+    const markdown = formatObservatoryMarkdown({
+      issues: state.errorMonitor.issues,
+      injections: state.errorMonitor.injections,
+      notes: state.errorMonitor.notes,
+    });
+    const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `faultlab-observatory-${new Date().toISOString().slice(0, 10)}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportPdf = () => {
+    const reportWindow = window.open("", "_blank", "width=900,height=700");
+    if (!reportWindow) {
+      setError("Allow pop-ups to print the report as PDF");
+      return;
+    }
+    const findingsHtml = findings.length
+      ? findings
+          .map(
+            (finding) => `<article><h2>${escapeHtml(issueTypeLabel(finding.type))} <small>${finding.count}x</small></h2><p>${escapeHtml(finding.message)}</p><p class="meta">${escapeHtml([finding.scenarioId, finding.ruleId, finding.url].filter(Boolean).join(" · "))}</p></article>`,
+          )
+          .join("")
+      : "<p>No findings recorded.</p>";
+    const notesHtml = state.errorMonitor.notes.length
+      ? state.errorMonitor.notes
+          .map(
+            (note) => `<article><h2>Note <small>${new Date(note.timestamp).toLocaleString()}</small></h2><p>${escapeHtml(note.body)}</p>${note.screenshotDataUrl ? `<img src="${escapeHtml(note.screenshotDataUrl)}" alt="Evidence screenshot">` : ""}</article>`,
+          )
+          .join("")
+      : "<p>No notes recorded.</p>";
+    reportWindow.document.write(`<!doctype html><html><head><title>FaultLab Error Observatory</title><style>body{font:14px -apple-system,BlinkMacSystemFont,sans-serif;color:#20232a;max-width:850px;margin:40px auto;padding:0 24px}h1{color:#9b3c22;border-bottom:2px solid #9b3c22;padding-bottom:10px}h2{font-size:16px;margin-bottom:8px}article{border-left:3px solid #d65b32;padding:10px 14px;margin:14px 0;break-inside:avoid}small,.meta{color:#68707d;font-weight:normal}img{display:block;max-width:100%;max-height:520px;margin-top:12px} @media print{body{margin:20px auto}}</style></head><body><h1>FaultLab Error Observatory</h1><p>Generated ${escapeHtml(new Date().toLocaleString())}</p><h2>Findings</h2>${findingsHtml}<h2>Notes and evidence</h2>${notesHtml}</body></html>`);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.onload = () => reportWindow.print();
   };
   const createFromRecording = async () => {
     const requestIds = [...selectedRecordings];
@@ -616,6 +712,91 @@ function App() {
                 </div>
               );
             })}
+          </div>
+        )}
+        <div className="observatory-actions">
+          <button
+            className="secondary"
+            type="button"
+            disabled={loading}
+            onClick={() => void captureScreenshot()}
+          >
+            Capture screenshot
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            disabled={loading}
+            onClick={exportMarkdown}
+          >
+            Export Markdown
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            disabled={loading}
+            onClick={exportPdf}
+          >
+            Print PDF
+          </button>
+        </div>
+        <div className="note-composer">
+          <textarea
+            value={noteBody}
+            maxLength={2000}
+            rows={3}
+            placeholder="Add an investigation note"
+            onChange={(event) => setNoteBody(event.target.value)}
+          />
+          {pendingScreenshot && (
+            <div className="evidence-preview">
+              <img src={pendingScreenshot} alt="Screenshot evidence preview" />
+              <button
+                className="remove-evidence"
+                type="button"
+                title="Remove screenshot"
+                aria-label="Remove screenshot"
+                onClick={() => setPendingScreenshot(null)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <button
+            className="primary"
+            type="button"
+            disabled={loading || (!noteBody.trim() && !pendingScreenshot)}
+            onClick={() => void createNote()}
+          >
+            Save note
+          </button>
+        </div>
+        {state.errorMonitor.notes.length > 0 && (
+          <div className="notes-list">
+            <span className="field-hint">Investigation notes</span>
+            {state.errorMonitor.notes
+              .slice()
+              .reverse()
+              .map((note) => (
+                <article className="note-entry" key={note.id}>
+                  <div className="note-entry-header">
+                    <time>{new Date(note.timestamp).toLocaleString()}</time>
+                    <button
+                      className="remove-evidence"
+                      type="button"
+                      title="Delete note"
+                      aria-label="Delete note"
+                      onClick={() => void deleteNote(note.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {note.body && <p>{note.body}</p>}
+                  {note.screenshotDataUrl && (
+                    <img src={note.screenshotDataUrl} alt="Evidence screenshot" />
+                  )}
+                </article>
+              ))}
           </div>
         )}
       </section>
