@@ -72,3 +72,5 @@ Current boundaries:
   bounded time/origin match is available; export reports are not implemented.
 - Runtime storage and incoming messages are untrusted and must be normalized and validated at the background boundary.
 - A debugger-backed recorder or error monitor owns one selected tab at a time.
+- Investigation notes, screenshots, and Markdown/PDF export are local-only and must preserve the explicit
+  review/redaction warning before files are shared.

@@ -72,6 +72,14 @@ available, show the scenario, rule action, and request context below the issue m
 list local and bounded; do not display request or response bodies in this view. A missing correlation must
 be represented as missing context, not as a guessed scenario.
 
+## Investigation Notes and Export
+
+Allow the user to add a short note, optionally capture the visible selected tab, and review the evidence
+before saving it. Keep note text and screenshot previews bounded so the panel remains usable. Markdown
+export downloads a local report; PDF export opens a print-friendly report and relies on the browser's
+`Save as PDF` action. Show a reminder that exported screenshots, URLs, source paths, and issue messages
+may contain sensitive data.
+
 ## Local-First Behavior
 
 Draft and saved configuration stays in Chrome local storage. The UI should never imply that scenarios are shared, synchronized, or active in every tab when the adapter only controls the selected tab.

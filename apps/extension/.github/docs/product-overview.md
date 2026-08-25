@@ -64,5 +64,6 @@ future work.
 
 The first monitoring slice collects console errors, failed network requests, runtime exceptions, and unhandled Promise rejections locally for the selected tab. The Side Panel shows the latest issues and supports clearing the local list.
 
-Grouping and failure correlation are available in the current development slice. DOM/performance detection,
-export, Auto Chaos, and full reports are planned.
+Grouping and failure correlation are available in the current development slice. Investigation notes,
+local Markdown export, and printable PDF reports with screenshots are also available. DOM/performance
+detection, richer redaction controls, Auto Chaos, and full reports are planned.

@@ -42,6 +42,11 @@ This metadata remains local and is bounded with the issue list. Correlation neve
 request body or response body. URL/query redaction is required before any future export or external
 integration.
 
+Investigation notes are limited to 20 entries. Note text is limited to 2000 characters and screenshots are
+stored as local JPEG data URLs up to 800 KB each. Markdown export applies basic query/token redaction;
+PDF printing uses the local browser print dialog. Review exported files before sharing them because URLs,
+issue messages, source paths, and screenshots may still contain sensitive application data.
+
 ## Sanitization
 
 Authorization

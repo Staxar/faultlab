@@ -35,3 +35,7 @@ Error Observatory derives grouped findings in the browser-neutral core from dete
 records successful injections while monitoring is active and attaches the nearest matching injection context
 to later issues by request ID or a bounded time/origin heuristic. This is best-effort until a shared CDP
 request identity is introduced.
+
+Investigation notes are persisted as bounded text and optional JPEG data URLs under the same local runtime
+state. Markdown formatting and PDF print markup are generated in the Side Panel; no report data is sent to
+a server.
