@@ -110,7 +110,7 @@ Status: first local correlation slice implemented in the `feature/error-observat
 The Side Panel groups repeated issues into local findings and correlates an issue with the latest matching
 injection context when available: scenario, rule, action, request, and timestamp. Response bodies, request
 bodies, and form values are not stored. Remaining work: explicit investigation sessions, better request
-identity across CDP domains, filters, and richer redaction controls. Local JSON/Markdown export and PDF
+identity across CDP domains, and richer redaction controls. Local JSON/Markdown export and PDF
 printing with notes/evidence are implemented. Do not add server sync, AI, Jira, or GitHub in this slice.
 
 ## MVP 1.0

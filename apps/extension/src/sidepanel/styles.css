@@ -89,6 +89,32 @@ h1 {
 .issues-panel .section-heading {
   margin-top: 0;
 }
+.issue-filter {
+  display: grid !important;
+  gap: 5px;
+  margin: 10px 0 0 !important;
+  color: #858894 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+.issue-filter select {
+  width: 100%;
+  border: 1px solid #343640;
+  border-radius: 7px;
+  background: #0f1013;
+  color: #e7e7ea;
+  padding: 7px 8px;
+  font: inherit;
+  font-weight: 400;
+}
+.issue-filter select:focus {
+  outline: 2px solid #a84c2e;
+  outline-offset: 1px;
+}
+.empty-filter {
+  display: block;
+  margin-top: 11px;
+}
 .issue-hint {
   display: block;
   margin-top: 9px;
