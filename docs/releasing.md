@@ -123,7 +123,7 @@ Check the archive manually and upload `faultlab-0.1.0.zip`. Keep the ZIP outside
 2. Create a new item in the Developer Dashboard.
 3. Upload `faultlab-0.1.0.zip`.
 4. Complete the store listing: name, short description, detailed description, category, language, screenshots, and promotional images where required. Use `apps/extension/public/icons/icon-128.png` as the extension icon and prepare the additional store artwork required by the dashboard from the same FaultLab branding.
-5. Explain the `debugger`, `storage`, `sidePanel`, and `tabs` permissions in the privacy practices and permission justification fields. State that runtime state is stored locally and that FaultLab does not require a backend.
+5. Explain the `activeTab`, `debugger`, `storage`, `sidePanel`, and `tabs` permissions in the privacy practices and permission justification fields. `activeTab` is used to capture a screenshot after the user invokes FaultLab; it avoids requesting `<all_urls>`. State that runtime state is stored locally and that FaultLab does not require a backend.
 6. Provide a privacy policy URL if the dashboard requires one. The policy must match the actual data behavior of the extension.
 7. Check the listing preview, submit for review, and record the submitted version and review status.
 

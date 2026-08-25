@@ -10,7 +10,7 @@
     "128": "icons/icon-128.png"
   },
   "minimum_chrome_version": "116",
-  "permissions": ["debugger", "storage", "sidePanel", "tabs"],
+  "permissions": ["activeTab", "debugger", "storage", "sidePanel", "tabs"],
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
