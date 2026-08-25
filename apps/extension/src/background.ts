@@ -6,6 +6,7 @@ import {
   type RecordedRequest,
   type DetectedIssue,
   type FaultInjection,
+  type InvestigationNote,
   type Scenario,
   type FaultRule,
   type RecordedEvent as RuntimeRecordedEvent,
@@ -17,6 +18,8 @@ import { isRuntimeMessage } from "./shared/messages";
 
 const KEY = "faultlab.runtime";
 const MAX_PERSISTED_ITEMS = 500;
+const MAX_NOTES = 20;
+const MAX_SCREENSHOT_CHARS = 800_000;
 const networkAdapter = new ChromeNetworkAdapter();
 let stateOperation = Promise.resolve();
 
@@ -232,6 +235,33 @@ function normalizeFaultInjection(value: unknown): FaultInjection | null {
   return value as unknown as FaultInjection;
 }
 
+function normalizeInvestigationNote(value: unknown): InvestigationNote | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.timestamp !== "number" ||
+    !Number.isFinite(value.timestamp) ||
+    typeof value.body !== "string" ||
+    value.body.length > 2000
+  )
+    return null;
+  if (
+    value.screenshotDataUrl !== undefined &&
+    (typeof value.screenshotDataUrl !== "string" ||
+      value.screenshotDataUrl.length > MAX_SCREENSHOT_CHARS ||
+      !value.screenshotDataUrl.startsWith("data:image/"))
+  )
+    return null;
+  return {
+    id: value.id,
+    timestamp: value.timestamp,
+    body: value.body,
+    ...(typeof value.screenshotDataUrl === "string"
+      ? { screenshotDataUrl: value.screenshotDataUrl }
+      : {}),
+  };
+}
+
 function normalizeRuntimeState(value: unknown): RuntimeState | null {
   if (!isRecord(value) || !Array.isArray(value.scenarios)) return null;
   const defaultIds = new Set(defaultScenarios.map((scenario) => scenario.id));
@@ -276,6 +306,11 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
         .map(normalizeFaultInjection)
         .filter((injection): injection is FaultInjection => injection !== null)
     : [];
+  const notes = Array.isArray(monitorValue.notes)
+    ? monitorValue.notes
+        .map(normalizeInvestigationNote)
+        .filter((note): note is InvestigationNote => note !== null)
+    : [];
   const activeScenarioId =
     typeof value.activeScenarioId === "string" &&
     scenarioIds.has(value.activeScenarioId) &&
@@ -297,6 +332,7 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
       tabId: monitorTabId,
       issues: issues.slice(-MAX_PERSISTED_ITEMS),
       injections: injections.slice(-MAX_PERSISTED_ITEMS),
+      notes: notes.slice(-20),
     },
   };
 }
@@ -340,7 +376,13 @@ async function getState(): Promise<RuntimeState> {
     activeScenarioId: null,
     scenarios: defaultScenarios,
     recorder: { active: false, tabId: null, requests: [], events: [] },
-    errorMonitor: { active: false, tabId: null, issues: [], injections: [] },
+    errorMonitor: {
+      active: false,
+      tabId: null,
+      issues: [],
+      injections: [],
+      notes: [],
+    },
   };
   await chrome.storage.local.set({ [KEY]: state });
   return state;
@@ -431,6 +473,44 @@ chrome.runtime.onMessage.addListener(
       if (typedMessage.type === "GET_DISCOVERED_DATA") {
         return { ok: true, discovered: networkAdapter.getDiscoveredData() };
       }
+      if (typedMessage.type === "CAPTURE_SCREENSHOT") {
+        const tabId =
+          state.errorMonitor.tabId ??
+          state.recorder.tabId ??
+          (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
+            ?.id;
+        if (tabId == null) {
+          return { ok: false, error: "No active tab to capture" };
+        }
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.windowId == null || !tab.url?.startsWith("http")) {
+          return {
+            ok: false,
+            error: "Screenshots are available on HTTP(S) pages only",
+          };
+        }
+        try {
+          const screenshotDataUrl = await chrome.tabs.captureVisibleTab(
+            tab.windowId,
+            { format: "jpeg", quality: 70 },
+          );
+          if (screenshotDataUrl.length > MAX_SCREENSHOT_CHARS) {
+            return {
+              ok: false,
+              error: "Screenshot is too large to store locally",
+            };
+          }
+          return { ok: true, screenshotDataUrl };
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not capture the selected tab",
+          };
+        }
+      }
       if (typedMessage.type === "RECORD_EVENT") {
         if (!state.recorder.active || sender.tab?.id == null) {
           return { ok: false, error: "Recorder is not active" };
@@ -466,6 +546,45 @@ chrome.runtime.onMessage.addListener(
             ...state.errorMonitor,
             issues: networkAdapter.getDetectedIssues(),
             injections: networkAdapter.getFaultInjections(),
+          },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "CREATE_NOTE") {
+        const body = typedMessage.body.trim();
+        if (!body && !typedMessage.screenshotDataUrl) {
+          return {
+            ok: false,
+            error: "Add a note or capture a screenshot first",
+          };
+        }
+        const note: InvestigationNote = {
+          id: `note-${crypto.randomUUID()}`,
+          timestamp: Date.now(),
+          body,
+          ...(typedMessage.screenshotDataUrl === undefined
+            ? {}
+            : { screenshotDataUrl: typedMessage.screenshotDataUrl }),
+        };
+        const next = {
+          ...state,
+          errorMonitor: {
+            ...state.errorMonitor,
+            notes: [...state.errorMonitor.notes, note].slice(-MAX_NOTES),
+          },
+        };
+        await chrome.storage.local.set({ [KEY]: next });
+        return { ok: true, state: next };
+      }
+      if (typedMessage.type === "DELETE_NOTE") {
+        const next = {
+          ...state,
+          errorMonitor: {
+            ...state.errorMonitor,
+            notes: state.errorMonitor.notes.filter(
+              (note) => note.id !== typedMessage.noteId,
+            ),
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -693,6 +812,7 @@ chrome.runtime.onMessage.addListener(
             tabId: activeTabId,
             issues: [],
             injections: [],
+            notes: state.errorMonitor.notes,
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
@@ -707,6 +827,7 @@ chrome.runtime.onMessage.addListener(
             tabId: null,
             issues: networkAdapter.getDetectedIssues(),
             injections: networkAdapter.getFaultInjections(),
+            notes: state.errorMonitor.notes,
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
