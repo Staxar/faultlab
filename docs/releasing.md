@@ -7,7 +7,8 @@ Observatory, investigation notes, and local export slices.
 ## Release policy
 
 `0.1.0` is the first public snapshot of the MVP. The current `0.2.0` development line additionally
-contains builder, recorder, and error-monitoring work. The `0.1.0` snapshot includes:
+contains builder, recorder, error-monitoring, Error Observatory, notes, evidence, export, and timeout work.
+The `0.1.0` snapshot includes:
 
 - network latency, bandwidth throttling, offline failures, delays, and HTTP failures;
 - JSON response mutation for Fetch/XHR responses;
@@ -19,13 +20,16 @@ Custom scenario CRUD, application limits, recorder timeline, error monitoring, r
 multi-tab orchestration were not part of the original `0.1.0` snapshot. They must be described as
 development features until a new version is released.
 
+The planned `0.2.0` release scope is maintained in [CHANGELOG.md](../CHANGELOG.md). It is not a release
+until the validation checklist passes, the tag is created, and the package is uploaded.
+
 Use semantic versioning for later releases:
 
 - `0.1.x` for backwards-compatible fixes and documentation updates;
 - `0.2.0` for the next backwards-compatible feature set;
 - `1.0.0` when the public API and product scope are considered stable.
 
-## Before the first release
+## Before any release
 
 Requirements:
 
@@ -54,6 +58,8 @@ Confirm that `apps/extension/dist` contains `manifest.json`, `background.js`, `c
 - endpoint, GraphQL operation, and JSON field discovery works after browsing a test page.
 - scenario activation and deactivation update the selected tab;
 - error monitoring and recorder sessions stay on one selected tab.
+- a request timeout ends with a network failure after the configured interval;
+- findings filters, notes, screenshot capture, Markdown export, and print-to-PDF work locally.
 
 ## Prepare the source release
 
@@ -87,12 +93,12 @@ For the remaining groups, use `git add` with the relevant paths, then run `git d
 git log --oneline --decorate
 ```
 
-Create and publish the release tag only after the final validation:
+Create and publish the `0.2.0` release tag only after the final validation:
 
 ```bash
-git tag -a v0.1.0 -m "FaultLab 0.1.0"
+git tag -a v0.2.0 -m "FaultLab 0.2.0"
 git push origin master
-git push origin v0.1.0
+git push origin v0.2.0
 ```
 
 If the default branch is not `master`, replace it with the actual branch name.
@@ -102,27 +108,27 @@ If the default branch is not `master`, replace it with the actual branch name.
 The ZIP must contain `manifest.json` at its root, not inside a `dist` directory:
 
 ```bash
-rm -f faultlab-0.1.0.zip
-(cd apps/extension/dist && zip -r ../../../faultlab-0.1.0.zip .)
-unzip -l faultlab-0.1.0.zip
+rm -f faultlab-0.2.0.zip
+(cd apps/extension/dist && zip -r ../../../faultlab-0.2.0.zip .)
+unzip -l faultlab-0.2.0.zip
 ```
 
-Check the archive manually and upload `faultlab-0.1.0.zip`. Keep the ZIP outside `apps/extension/dist` so it cannot be included in a later build accidentally.
+Check the archive manually and upload `faultlab-0.2.0.zip`. Keep the ZIP outside `apps/extension/dist` so it cannot be included in a later build accidentally.
 
 ## Publish on GitHub
 
 1. Push the branch and tag.
 2. Open the repository's Releases page.
-3. Create a release from tag `v0.1.0`.
-4. Use `FaultLab 0.1.0` as the title.
-5. Attach `faultlab-0.1.0.zip` and describe the included capabilities and known limitations from the release policy above.
+3. Create a release from tag `v0.2.0`.
+4. Use `FaultLab 0.2.0` as the title.
+5. Attach `faultlab-0.2.0.zip` and use [CHANGELOG.md](../CHANGELOG.md) for the included capabilities and known limitations.
 6. Mark it as the first public release when the source and package are ready.
 
 ## Publish on the Chrome Web Store
 
 1. Register for a Chrome Web Store developer account and complete the one-time registration payment, if required by Google.
 2. Create a new item in the Developer Dashboard.
-3. Upload `faultlab-0.1.0.zip`.
+3. Upload `faultlab-0.2.0.zip`.
 4. Complete the store listing: name, short description, detailed description, category, language, screenshots, and promotional images where required. Use `apps/extension/public/icons/icon-128.png` as the extension icon and prepare the additional store artwork required by the dashboard from the same FaultLab branding.
 5. Explain the `activeTab`, `debugger`, `storage`, `sidePanel`, and `tabs` permissions in the privacy practices and permission justification fields. `activeTab` is used to capture a screenshot after the user invokes FaultLab; it avoids requesting `<all_urls>`. State that runtime state is stored locally and that FaultLab does not require a backend.
 6. Provide a privacy policy URL if the dashboard requires one. The policy must match the actual data behavior of the extension.
