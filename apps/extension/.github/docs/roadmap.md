@@ -21,6 +21,9 @@ The first public version is `0.1.0`. It is a release snapshot of the current wor
 Status: complete. The initial implementation shipped in the historical `0.1.0` snapshot; the current
 development line is `0.2.0`.
 
+The current development line adds a bounded request timeout action that fails a selected request with
+`TimedOut` after 100 to 60000 ms.
+
 Scope:
 
 - remove a JSON field

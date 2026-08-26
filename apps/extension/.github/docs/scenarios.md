@@ -32,7 +32,7 @@ Configurable in MVP 0.3:
 - resource types, default `fetch` and `xhr`;
 - optional application limit.
 
-Example: fail 70% of `POST` requests whose URL contains `/api/payment` with status 500. The remaining 30% continue normally. A timeout is a separate future action and is not represented by the HTTP failure control.
+Example: fail 70% of `POST` requests whose URL contains `/api/payment` with status 500. The remaining 30% continue normally. A timeout is a separate request action and is not represented by the HTTP failure control. The current development line supports 100 to 60000 ms and fails the request with `TimedOut`.
 
 ## Slow Network
 

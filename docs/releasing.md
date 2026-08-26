@@ -1,7 +1,7 @@
 # Releasing FaultLab
 
 This document describes the first `0.1.0` release and the process for future updates. The current
-development version is `0.2.0`, including the current scenario, recorder, error-monitoring, Error
+development version is `0.2.0`, including the current scenario, timeout, recorder, error-monitoring, Error
 Observatory, investigation notes, and local export slices.
 
 ## Release policy
