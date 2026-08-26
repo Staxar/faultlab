@@ -17,6 +17,10 @@ import type {
 } from "@faultlab/core";
 import "./styles.css";
 
+const devChromeReady = import.meta.env.DEV
+  ? import("./dev-chrome").then(({ installDevChrome }) => installDevChrome())
+  : Promise.resolve();
+
 const empty: RuntimeState = {
   enabled: false,
   activeScenarioId: null,
@@ -181,7 +185,8 @@ function App() {
   });
   useEffect(() => {
     let mounted = true;
-    void send({ type: "GET_STATE" })
+    void devChromeReady
+      .then(() => send({ type: "GET_STATE" }))
       .then((response) => {
         if (!mounted) return;
         if (response.state) setState(response.state);
@@ -531,6 +536,9 @@ function App() {
     : [];
   return (
     <main className="app">
+      {import.meta.env.DEV && (
+        <div className="dev-banner">Local development mode · Chrome APIs mocked</div>
+      )}
       <header>
         <div>
           <small>FAILURE INJECTION</small>
@@ -1505,7 +1513,13 @@ function App() {
     </main>
   );
 }
-createRoot(document.getElementById("root")!).render(
+const hotWindow = window as typeof window & {
+  __faultlabRoot?: ReturnType<typeof createRoot>;
+};
+const appRoot =
+  hotWindow.__faultlabRoot ?? createRoot(document.getElementById("root")!);
+hotWindow.__faultlabRoot = appRoot;
+appRoot.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

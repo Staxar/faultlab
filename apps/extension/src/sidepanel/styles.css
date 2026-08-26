@@ -11,6 +11,16 @@ body {
   min-height: 100vh;
   padding: 18px;
 }
+.dev-banner {
+  margin: -4px -4px 14px;
+  border: 1px solid #79582c;
+  border-radius: 7px;
+  background: #2b2114;
+  color: #e4bd78;
+  padding: 7px 9px;
+  font-size: 10px;
+  line-height: 1.3;
+}
 header {
   display: flex;
   justify-content: space-between;

@@ -25,7 +25,13 @@ pnpm install
 pnpm dev
 ```
 
-Then build and load `apps/extension/dist` from `chrome://extensions` → Load unpacked.
+For local UI work, open `http://127.0.0.1:5173/sidepanel.html`. If that port is already in use, Vite
+prints the next available port, for example `http://127.0.0.1:5174/sidepanel.html`.
+
+The Vite page runs with a development-only Chrome API mock, so scenarios, recorder data, error findings,
+notes, screenshots, and exports can be exercised without loading an unpacked extension. This mode uses
+sample local data and does not intercept real browser requests. For real Chrome Debugger behavior, build
+and load `apps/extension/dist` from `chrome://extensions` -> Load unpacked.
 
 ## Build
 

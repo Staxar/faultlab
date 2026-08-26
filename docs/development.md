@@ -1,0 +1,55 @@
+# Local Development
+
+FaultLab has two ways to verify the Side Panel.
+
+## Vite UI mode
+
+From the repository root:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173/sidepanel.html
+```
+
+If port `5173` is occupied, Vite selects another port and prints the exact URL. Use the
+`/sidepanel.html` path; the Vite root is not an application entry point.
+
+This mode enables `src/sidepanel/dev-chrome.ts` only in development. It mocks the runtime messaging API
+and provides sample requests, findings, notes, and screenshot evidence. It is intended for rapid UI and
+workflow feedback. It does not attach Chrome Debugger, mutate real responses, inspect real tabs, or test
+content-script behavior.
+
+The local workflow to exercise is:
+
+1. start recording and review sample requests and the journey timeline;
+2. start error monitoring and review grouped findings;
+3. capture a screenshot and save a note;
+4. filter findings;
+5. export Markdown or print the report to PDF;
+6. configure or create a scenario.
+
+## Real extension mode
+
+To test Chrome APIs and real pages:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Then load `apps/extension/dist` as an unpacked extension from `chrome://extensions`. Use this mode for
+Chrome Debugger interception, real recorder events, content-script error reports, `captureVisibleTab`,
+and manifest/permission checks.
+
+## Boundaries
+
+- Vite mock state exists only in the current browser page and resets on refresh.
+- Real extension state is stored under `faultlab.runtime` in `chrome.storage.local`.
+- The mock must stay development-only and must not be used as a substitute for Chrome acceptance checks.
