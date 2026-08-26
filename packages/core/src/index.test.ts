@@ -22,6 +22,24 @@ describe("scenario validation and matching", () => {
     expect(validateScenario(scenario)).toBe("Application limit must be between 1 and 1000");
   });
 
+  it("validates timeout bounds", () => {
+    const scenario = structuredClone(defaultScenarios[0]);
+    scenario.rules[0].action = {
+      type: "timeout",
+      timeoutMs: 50,
+      probability: 1,
+    };
+    expect(validateScenario(scenario)).toBe(
+      "Timeout must be between 100 and 60000 ms",
+    );
+    scenario.rules[0].action = {
+      type: "timeout",
+      timeoutMs: 5000,
+      probability: 1,
+    };
+    expect(validateScenario(scenario)).toBeNull();
+  });
+
   it("matches method, resource type, and URL together", () => {
     const rule = structuredClone(defaultScenarios[0].rules[0]);
     rule.matcher = { urlIncludes: "/checkout", methods: ["POST"], resourceTypes: ["fetch"] };
