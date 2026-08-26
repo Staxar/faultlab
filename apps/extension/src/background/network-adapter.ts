@@ -400,6 +400,25 @@ export class ChromeNetworkAdapter {
         return;
       }
 
+      if (rule.action.type === "timeout") {
+        const timeout = setTimeout(() => {
+          this.pendingTimeouts.delete(timeout);
+          if (this.attachedTabId !== tabId) return;
+          void chrome.debugger
+            .sendCommand({ tabId }, "Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "TimedOut",
+            })
+            .then(() => this.recordFaultInjection(tabId, event, rule))
+            .catch((error) =>
+              console.warn("FaultLab could not time out request", error),
+            );
+        }, Math.max(100, rule.action.timeoutMs));
+        this.recordApplication(rule);
+        this.pendingTimeouts.add(timeout);
+        return;
+      }
+
       if (rule.action.type !== "delay") {
         await chrome.debugger.sendCommand({ tabId }, "Fetch.continueRequest", {
           requestId: event.requestId,

@@ -10,6 +10,7 @@ export type RuleAction =
       probability: number;
     }
   | { type: "delay"; delayMs: number; probability: number }
+  | { type: "timeout"; timeoutMs: number; probability: number }
   | {
       type: "throttle";
       latencyMs: number;
@@ -329,6 +330,14 @@ export function validateScenario(scenario: Scenario): string | null {
         rule.action.delayMs > 60000)
     ) {
       return "Delay must be between 0 and 60000 ms";
+    }
+    if (
+      rule.action.type === "timeout" &&
+      (!Number.isFinite(rule.action.timeoutMs) ||
+        rule.action.timeoutMs < 100 ||
+        rule.action.timeoutMs > 60000)
+    ) {
+      return "Timeout must be between 100 and 60000 ms";
     }
     if (
       rule.action.type === "throttle" &&

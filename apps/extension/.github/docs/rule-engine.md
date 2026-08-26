@@ -15,11 +15,13 @@ The rule engine is browser-independent. A rule answers:
 
 - `error`: fulfill the request with a selected HTTP status;
 - `delay`: hold a matched request before continuing it;
+- `timeout`: fail a matched request with `TimedOut` after a bounded interval;
 - `offline`: fail a matched request with `InternetDisconnected`;
 - `throttle`: configure tab-level latency and upload/download bandwidth through Chrome Network emulation;
 - `mutate`: modify a matched JSON response during the Fetch Response stage.
 
-The first four actions are MVP 0.1 behavior. `mutate` is the MVP 0.2 response action.
+The first four actions are MVP 0.1 behavior. `mutate` is the MVP 0.2 response action. `timeout` is a
+request-stage action in the current `0.2.0` development line.
 
 ## JSON Mutation
 
@@ -58,7 +60,14 @@ Only one tab-level `throttle` rule should be active in a scenario. Its probabili
 
 ## Rule Ordering
 
-Request-stage actions are evaluated in scenario order. The first enabled rule that matches and passes its probability owns the request. A mutation rule is evaluated at Response stage and does not also act at Request stage. If no rule applies, the adapter continues the request or response unchanged.
+Request-stage actions are evaluated in scenario order. The first enabled rule that matches owns the request;
+its probability is then evaluated, and a probability miss continues that request without falling through to
+a later rule. A mutation rule is evaluated at Response stage and does not also act at Request stage. If no
+rule applies, the adapter continues the request or response unchanged. Only the first eligible throttle rule
+configures tab-level emulation.
+
+The adapter uses best-effort fail-open continuation for unexpected request and response handling errors.
+Restricted pages, detached tabs, or a failed Chrome Debugger command can still prevent continuation.
 
 ## Deferred Engine Features
 

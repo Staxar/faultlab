@@ -54,6 +54,7 @@ const TARGET_TYPES = ["string", "number", "boolean", "null"] as const;
 const ACTION_TYPES: RuleAction["type"][] = [
   "error",
   "delay",
+  "timeout",
   "throttle",
   "offline",
   "mutate",
@@ -63,6 +64,7 @@ type FindingFilter = "all" | DetectedIssue["type"] | "correlated";
 function createAction(type: RuleAction["type"]): RuleAction {
   if (type === "error") return { type, status: 500, probability: 1 };
   if (type === "delay") return { type, delayMs: 800, probability: 1 };
+  if (type === "timeout") return { type, timeoutMs: 5000, probability: 1 };
   if (type === "throttle") {
     return {
       type,
@@ -1235,6 +1237,27 @@ function App() {
                         )
                       }
                     />
+                  </label>
+                )}
+                {rule.action.type === "timeout" && (
+                  <label>
+                    Timeout (ms)
+                    <input
+                      type="number"
+                      min="100"
+                      max="60000"
+                      value={rule.action.timeoutMs}
+                      onChange={(event) =>
+                        updateAction(ruleIndex, (action) =>
+                          action.type === "timeout"
+                            ? { ...action, timeoutMs: Number(event.target.value) }
+                            : action,
+                        )
+                      }
+                    />
+                    <span className="field-hint">
+                      Fails the request with a network timeout after the selected interval.
+                    </span>
                   </label>
                 )}
                 {rule.action.type === "throttle" && (

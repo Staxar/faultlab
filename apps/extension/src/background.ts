@@ -39,7 +39,7 @@ function isPersistedRule(value: unknown): value is FaultRule {
     return false;
   const actionType = value.action.type;
   if (
-    !["error", "delay", "throttle", "mutate", "offline"].includes(
+    !["error", "delay", "timeout", "throttle", "mutate", "offline"].includes(
       String(actionType),
     ) ||
     typeof value.action.probability !== "number"
@@ -229,7 +229,7 @@ function normalizeFaultInjection(value: unknown): FaultInjection | null {
   if (value.status !== undefined && typeof value.status !== "number")
     return null;
   if (
-    !["error", "delay", "throttle", "mutate", "offline"].includes(value.action)
+    !["error", "delay", "timeout", "throttle", "mutate", "offline"].includes(value.action)
   )
     return null;
   return value as unknown as FaultInjection;
