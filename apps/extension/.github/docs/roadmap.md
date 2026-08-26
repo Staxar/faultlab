@@ -91,7 +91,9 @@ Monitor locally:
 
 The Side Panel can start, stop, and clear monitoring for the selected tab. It keeps up to 500 issues and
 500 injections in `faultlab.runtime`, displays grouped findings, and shows matching scenario/rule context
-when available. Filtering, export, and historical reports remain future work.
+when available. Findings can be filtered by source or correlation, and local notes, screenshots, Markdown
+export, and PDF printing are available. Historical reports, richer redaction, and DOM/performance detection
+remain future work.
 
 ## Immediate Stabilization
 
@@ -101,17 +103,17 @@ The current stabilization branch addresses runtime correctness before adding mor
 - paused requests and responses have best-effort fail-open continuation;
 - persisted state and runtime messages are normalized and deeply validated;
 - recorder and monitoring sessions are bound to one selected tab;
-- focused automated checks are still needed before implementing failure correlation.
+- browser-independent core regression checks are in place; adapter and Side Panel behavior still require manual or mocked browser checks.
 
 ## Next Product Slice - Error Observatory
 
-Status: first local correlation slice implemented in the `feature/error-observatory` branch.
+Status: first local correlation slice implemented and merged into `master`.
 
 The Side Panel groups repeated issues into local findings and correlates an issue with the latest matching
 injection context when available: scenario, rule, action, request, and timestamp. Response bodies, request
-bodies, and form values are not stored. Remaining work: explicit investigation sessions, better request
-identity across CDP domains, and richer redaction controls. Local JSON/Markdown export and PDF
-printing with notes/evidence are implemented. Do not add server sync, AI, Jira, or GitHub in this slice.
+bodies, and form values are not stored. Local notes, screenshots, Markdown export, PDF printing, and
+view-only filters are implemented. Remaining work: explicit investigation sessions, better request identity
+across CDP domains, and richer redaction controls. Do not add server sync, AI, Jira, or GitHub in this slice.
 
 ## MVP 1.0
 

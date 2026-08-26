@@ -39,6 +39,7 @@ From the repository root:
 ```bash
 pnpm install
 pnpm typecheck
+pnpm test
 pnpm build
 git diff --check
 ```
@@ -136,7 +137,7 @@ For every update:
 1. Decide whether the change is a patch or a minor feature release.
 2. Update the version in the root `package.json`, `apps/extension/package.json`, `packages/core/package.json`, and `apps/extension/manifest.json`.
 3. Update the current status and release notes in `README.md` and this guide.
-4. Run `pnpm typecheck`, `pnpm build`, and `git diff --check`.
+4. Run `pnpm test`, `pnpm typecheck`, `pnpm build`, and `git diff --check`.
 5. Build a ZIP with the new version in its filename.
 6. Commit the change, create an annotated tag such as `v0.1.1` or `v0.2.0`, and push both.
 7. Upload the new ZIP as a new Chrome Web Store submission and update the GitHub release.

@@ -36,9 +36,9 @@ pnpm typecheck
 
 ## Current Status
 
-The first public release was `0.1.0`. The current development version is `0.2.0` and adds local custom scenario CRUD, per-request application limits, broad-matcher confirmation, a network recorder with a local journey timeline, and local error detection on top of the release capabilities. Non-JSON or unreadable responses pass through unchanged.
+The first public release was `0.1.0`. The current development version is `0.2.0` and adds local custom scenario CRUD, per-request application limits, broad-matcher confirmation, a network recorder with a local journey timeline, local error detection, Error Observatory findings, investigation notes, screenshots, and local Markdown/PDF export. Non-JSON or unreadable responses pass through unchanged.
 
-Custom scenario CRUD is available in the development branch after `0.1.0`: create, edit, persist, and delete local scenarios with one or more rules. Multi-tab orchestration, redacted export, and richer Error Observatory analysis remain planned for future updates.
+Custom scenario CRUD is available in the development branch after `0.1.0`: create, edit, persist, and delete local scenarios with one or more rules. Multi-tab orchestration, richer redaction, and advanced Error Observatory analysis remain planned for future updates.
 
 ## Release
 

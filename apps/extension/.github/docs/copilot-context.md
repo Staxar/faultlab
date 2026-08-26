@@ -75,3 +75,5 @@ Current boundaries:
 - Investigation notes, screenshots, and Markdown/PDF export are local-only and must preserve the explicit
   review/redaction warning before files are shared.
 - Error Observatory findings can be filtered by source type or injection correlation; filters are view-only.
+- Core regression tests run with `pnpm test`; Chrome adapter and Side Panel behavior still require mocked or
+  manual browser checks because no end-to-end browser test suite is configured.

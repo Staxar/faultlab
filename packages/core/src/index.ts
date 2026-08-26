@@ -126,7 +126,7 @@ export type ObservatoryData = {
 
 export function redactReportText(value: string): string {
   return value
-    .replace(/([?&](?:token|access_token|authorization|password|secret|session)[^=]*=)[^&\s]*/gi, "$1[REDACTED]")
+    .replace(/(^|[?&\s])((?:token|access_token|authorization|password|secret|session)[^=\s]*\s*=\s*)[^&\s]*/gi, "$1$2[REDACTED]")
     .replace(/\b(?:Bearer\s+)?[A-Za-z0-9_-]{24,}\b/g, "[REDACTED]");
 }
 
