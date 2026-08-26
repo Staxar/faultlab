@@ -14,8 +14,9 @@
 - Use Node.js 20+ and pnpm 10+ (`pnpm@10.15.0`). Run `pnpm install` before working from a fresh checkout.
 - `pnpm build` typechecks and bundles the extension into `apps/extension/dist`.
 - `pnpm typecheck` runs TypeScript checks across all workspace packages.
+- `pnpm test` runs Vitest regression tests for browser-independent core behavior.
 - `pnpm dev` starts the extension's Vite development server at `127.0.0.1`.
-- There is currently no configured test runner, linter, or formatter; do not assume Jest, Vitest, ESLint, or Prettier commands exist.
+- There is currently no configured linter or formatter; do not assume ESLint or Prettier commands exist. Browser adapter and UI behavior still need manual or mocked checks.
 - After a build, load `apps/extension/dist` as an unpacked extension from `chrome://extensions` when manual verification is needed.
 
 ## Implementation Conventions
