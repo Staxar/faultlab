@@ -46,6 +46,13 @@ extension removes its local storage.
 
 FaultLab does not sell, rent, or share this data with third parties.
 
+## Chrome Web Store Limited Use
+
+FaultLab's use of information received from Chrome APIs adheres to the Chrome Web Store User Data Policy,
+including the Limited Use requirements. Data is used only to provide the disclosed FaultLab testing
+features and related security and reliability functions. FaultLab does not use this data for advertising,
+credit evaluation, lending, data brokerage, or unrelated purposes.
+
 ## Reports and screenshots
 
 Markdown and PDF reports are generated locally. Markdown export applies basic token and query redaction,

@@ -533,10 +533,30 @@ chrome.runtime.onMessage.addListener(
               error: "Screenshots are available on HTTP(S) pages only",
             };
           }
-          const screenshotDataUrl = await chrome.tabs.captureVisibleTab(
-            tab.windowId,
-            { format: "jpeg", quality: 70 },
-          );
+          let screenshotDataUrl: string;
+          try {
+            screenshotDataUrl = await chrome.tabs.captureVisibleTab(
+              tab.windowId,
+              { format: "jpeg", quality: 70 },
+            );
+          } catch (captureError) {
+            try {
+              screenshotDataUrl = await networkAdapter.captureScreenshot(tab.id);
+            } catch (debuggerCaptureError) {
+              const captureMessage =
+                captureError instanceof Error
+                  ? captureError.message
+                  : "Chrome denied visible-tab capture";
+              const debuggerMessage =
+                debuggerCaptureError instanceof Error
+                  ? debuggerCaptureError.message
+                  : "Chrome debugger screenshot capture failed";
+              return {
+                ok: false,
+                error: `${captureMessage}. ${debuggerMessage}`,
+              };
+            }
+          }
           if (screenshotDataUrl.length > MAX_SCREENSHOT_CHARS) {
             return {
               ok: false,

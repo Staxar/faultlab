@@ -93,12 +93,12 @@ For the remaining groups, use `git add` with the relevant paths, then run `git d
 git log --oneline --decorate
 ```
 
-Create and publish the `0.2.0` release tag only after the final validation:
+For the current `0.2.1` maintenance release, create and publish the release tag only after the final validation:
 
 ```bash
-git tag -a v0.2.0 -m "FaultLab 0.2.0"
+git tag -a v0.2.1 -m "FaultLab 0.2.1"
 git push origin master
-git push origin v0.2.0
+git push origin v0.2.1
 ```
 
 If the default branch is not `master`, replace it with the actual branch name.
@@ -108,9 +108,9 @@ If the default branch is not `master`, replace it with the actual branch name.
 The ZIP must contain `manifest.json` at its root, not inside a `dist` directory:
 
 ```bash
-rm -f faultlab-0.2.0.zip
-(cd apps/extension/dist && zip -r ../../../faultlab-0.2.0.zip .)
-unzip -l faultlab-0.2.0.zip
+rm -f faultlab-0.2.1.zip
+(cd apps/extension/dist && zip -r ../../../faultlab-0.2.1.zip .)
+unzip -l faultlab-0.2.1.zip
 ```
 
 Check the archive manually and upload `faultlab-0.2.0.zip`. Keep the ZIP outside `apps/extension/dist` so it cannot be included in a later build accidentally.
@@ -119,16 +119,16 @@ Check the archive manually and upload `faultlab-0.2.0.zip`. Keep the ZIP outside
 
 1. Push the branch and tag.
 2. Open the repository's Releases page.
-3. Create a release from tag `v0.2.0`.
-4. Use `FaultLab 0.2.0` as the title.
-5. Attach `faultlab-0.2.0.zip` and use [CHANGELOG.md](../CHANGELOG.md) for the included capabilities and known limitations.
+3. Create a release from tag `v0.2.1`.
+4. Use `FaultLab 0.2.1` as the title.
+5. Attach `faultlab-0.2.1.zip` and use [CHANGELOG.md](../CHANGELOG.md) for the included capabilities and known limitations.
 6. Mark it as the first public release when the source and package are ready.
 
 ## Publish on the Chrome Web Store
 
 1. Register for a Chrome Web Store developer account and complete the one-time registration payment, if required by Google.
 2. Create a new item in the Developer Dashboard.
-3. Upload `faultlab-0.2.0.zip`.
+3. Upload `faultlab-0.2.1.zip`.
 4. Complete the store listing: name, short description, detailed description, category, language, screenshots, and promotional images where required. Use `apps/extension/public/icons/icon-128.png` as the extension icon and prepare the additional store artwork required by the dashboard from the same FaultLab branding.
 5. Explain the `activeTab`, `debugger`, `storage`, `sidePanel`, and `tabs` permissions in the privacy practices and permission justification fields. `activeTab` is used to capture a screenshot after the user invokes FaultLab; it avoids requesting `<all_urls>`. State that runtime state is stored locally and that FaultLab does not require a backend.
 6. Provide a privacy policy URL if the dashboard requires one. The policy must match the actual data behavior of the extension.
