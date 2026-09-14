@@ -283,6 +283,8 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
   const recorderValue = isRecord(value.recorder) ? value.recorder : {};
   const recorderTabId =
     typeof recorderValue.tabId === "number" ? recorderValue.tabId : null;
+  const recorderActive =
+    recorderValue.active === true && recorderTabId !== null;
   const recorderRequests = Array.isArray(recorderValue.requests)
     ? recorderValue.requests
         .map(normalizeRecordedRequest)
@@ -296,6 +298,8 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
   const monitorValue = isRecord(value.errorMonitor) ? value.errorMonitor : {};
   const monitorTabId =
     typeof monitorValue.tabId === "number" ? monitorValue.tabId : null;
+  const monitorActive =
+    monitorValue.active === true && monitorTabId !== null;
   const issues = Array.isArray(monitorValue.issues)
     ? monitorValue.issues
         .map(normalizeDetectedIssue)
@@ -322,14 +326,14 @@ function normalizeRuntimeState(value: unknown): RuntimeState | null {
     activeScenarioId,
     scenarios,
     recorder: {
-      active: recorderValue.active === true && recorderTabId !== null,
-      tabId: recorderTabId,
+      active: recorderActive,
+      tabId: recorderActive ? recorderTabId : null,
       requests: recorderRequests.slice(-MAX_PERSISTED_ITEMS),
       events: recorderEvents.slice(-MAX_PERSISTED_ITEMS),
     },
     errorMonitor: {
-      active: monitorValue.active === true && monitorTabId !== null,
-      tabId: monitorTabId,
+      active: monitorActive,
+      tabId: monitorActive ? monitorTabId : null,
       issues: issues.slice(-MAX_PERSISTED_ITEMS),
       injections: injections.slice(-MAX_PERSISTED_ITEMS),
       notes: notes.slice(-20),
@@ -436,6 +440,32 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
       console.warn("FaultLab could not sync the selected tab", error),
     );
 });
+chrome.tabs.onRemoved.addListener((tabId) => {
+  const operation = stateOperation.then(async () => {
+    const state = await getState();
+    const recorderRemoved = state.recorder.tabId === tabId;
+    const monitorRemoved = state.errorMonitor.tabId === tabId;
+    if (!recorderRemoved && !monitorRemoved) return;
+
+    const next: RuntimeState = {
+      ...state,
+      recorder: recorderRemoved
+        ? { ...state.recorder, active: false, tabId: null }
+        : state.recorder,
+      errorMonitor: monitorRemoved
+        ? { ...state.errorMonitor, active: false, tabId: null }
+        : state.errorMonitor,
+    };
+    await chrome.storage.local.set({ [KEY]: next });
+    await syncNetwork(next);
+  });
+  stateOperation = operation.then(
+    () => undefined,
+    (error) => {
+      console.warn("FaultLab could not clean up the closed tab", error);
+    },
+  );
+});
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading")
     networkAdapter.clearDiscoveredData(tabId);
@@ -477,7 +507,8 @@ chrome.runtime.onMessage.addListener(
         try {
           let tab: chrome.tabs.Tab | undefined;
           const preferredTabId =
-            state.errorMonitor.tabId ?? state.recorder.tabId;
+            (state.errorMonitor.active ? state.errorMonitor.tabId : null) ??
+            (state.recorder.active ? state.recorder.tabId : null);
           if (preferredTabId != null) {
             try {
               tab = await chrome.tabs.get(preferredTabId);
@@ -620,7 +651,20 @@ chrome.runtime.onMessage.addListener(
             : null,
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
+        try {
+          await syncNetwork(next);
+        } catch (error) {
+          if (typedMessage.enabled) {
+            await chrome.storage.local.set({ [KEY]: state });
+          }
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not update FaultLab state",
+          };
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "ACTIVATE_SCENARIO") {
@@ -691,7 +735,20 @@ chrome.runtime.onMessage.addListener(
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
+        if (state.activeScenarioId === typedMessage.scenario.id) {
+          try {
+            await syncNetwork(next);
+          } catch (error) {
+            await chrome.storage.local.set({ [KEY]: state });
+            return {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Could not update the active scenario",
+            };
+          }
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "RESET_SCENARIO") {
@@ -708,7 +765,20 @@ chrome.runtime.onMessage.addListener(
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
+        if (state.activeScenarioId === typedMessage.scenarioId) {
+          try {
+            await syncNetwork(next);
+          } catch (error) {
+            await chrome.storage.local.set({ [KEY]: state });
+            return {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Could not reset the active scenario",
+            };
+          }
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "CREATE_SCENARIO") {
@@ -740,6 +810,8 @@ chrome.runtime.onMessage.addListener(
           return { ok: false, error: "Built-in scenarios cannot be deleted" };
         const next = {
           ...state,
+          enabled:
+            state.activeScenarioId === scenario.id ? false : state.enabled,
           activeScenarioId:
             state.activeScenarioId === scenario.id
               ? null
@@ -749,7 +821,20 @@ chrome.runtime.onMessage.addListener(
           ),
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
+        if (state.activeScenarioId === scenario.id) {
+          try {
+            await syncNetwork(next);
+          } catch (error) {
+            await chrome.storage.local.set({ [KEY]: state });
+            return {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Could not delete the active scenario",
+            };
+          }
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "START_RECORDING") {
@@ -778,8 +863,32 @@ chrome.runtime.onMessage.addListener(
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next);
-        const activeTab = await chrome.tabs.get(activeTabId);
+        try {
+          await syncNetwork(next);
+        } catch (error) {
+          await chrome.storage.local.set({ [KEY]: state });
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not start recording",
+          };
+        }
+        let activeTab: chrome.tabs.Tab;
+        try {
+          activeTab = await chrome.tabs.get(activeTabId);
+        } catch (error) {
+          await networkAdapter.stop();
+          await chrome.storage.local.set({ [KEY]: state });
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "The selected tab is no longer available",
+          };
+        }
         if (activeTab.url?.startsWith("http")) {
           networkAdapter.recordEvent(activeTabId, {
             id: `event-${crypto.randomUUID()}`,
@@ -828,7 +937,18 @@ chrome.runtime.onMessage.addListener(
           },
         };
         await chrome.storage.local.set({ [KEY]: next });
-        await syncNetwork(next, activeTabId);
+        try {
+          await syncNetwork(next, activeTabId);
+        } catch (error) {
+          await chrome.storage.local.set({ [KEY]: state });
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Could not start error monitoring",
+          };
+        }
         return { ok: true, state: next };
       }
       if (typedMessage.type === "STOP_ERROR_MONITORING") {
@@ -860,7 +980,7 @@ chrome.runtime.onMessage.addListener(
           ...state,
           recorder: {
             active: false,
-            tabId: state.recorder.tabId,
+            tabId: null,
             requests: networkAdapter.getRecordedRequests(),
             events: networkAdapter.getRecordedEvents(),
           },

@@ -79,7 +79,9 @@ export class ChromeNetworkAdapter {
       if (source.tabId === this.attachedTabId) {
         this.attachedTabId = null;
         this.rules = [];
+        this.recording = false;
         this.monitoring = false;
+        this.scenarioId = undefined;
         this.clearPendingTimeouts();
       }
     });
@@ -223,6 +225,15 @@ export class ChromeNetworkAdapter {
     monitoring: boolean,
     scenarioId?: string,
   ): Promise<void> {
+    if (
+      this.attachedTabId === tabId &&
+      this.recording === recording &&
+      this.monitoring === monitoring &&
+      this.scenarioId === scenarioId &&
+      JSON.stringify(this.rules) === JSON.stringify(rules)
+    ) {
+      return;
+    }
     if (this.attachedTabId !== tabId) {
       await this.stopNow();
       this.observedUrls.clear();
