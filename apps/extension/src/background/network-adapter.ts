@@ -133,6 +133,36 @@ export class ChromeNetworkAdapter {
     return [...this.faultInjections];
   }
 
+  async captureScreenshot(tabId: number): Promise<string> {
+    const alreadyAttached = this.attachedTabId === tabId;
+    if (!alreadyAttached) {
+      await chrome.debugger.attach({ tabId }, "1.3");
+    }
+
+    try {
+      const result = (await chrome.debugger.sendCommand(
+        { tabId },
+        "Page.captureScreenshot",
+        { format: "jpeg", quality: 70 },
+      )) as { data?: unknown };
+      if (typeof result.data !== "string" || result.data.length === 0) {
+        throw new Error("Chrome did not return screenshot data");
+      }
+      return `data:image/jpeg;base64,${result.data}`;
+    } finally {
+      if (!alreadyAttached) {
+        try {
+          await chrome.debugger.detach({ tabId });
+        } catch (error) {
+          console.warn(
+            "FaultLab could not detach after capturing a screenshot",
+            error,
+          );
+        }
+      }
+    }
+  }
+
   clearRecordedRequests(): void {
     this.recordedRequests = [];
     this.recordedRequestIds.clear();

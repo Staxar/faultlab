@@ -1,6 +1,6 @@
 # Chrome Web Store listing preparation
 
-This document contains the release text and reviewer information for FaultLab 0.2.0.
+This document contains the release text and reviewer information for FaultLab 0.2.1.
 
 ## Short description
 
@@ -75,7 +75,7 @@ form values or request bodies.
 
 ## Required submission materials
 
-- `faultlab-0.2.0.zip` with `manifest.json` at the archive root;
+- `faultlab-0.2.1.zip` with `manifest.json` at the archive root;
 - the 128px extension icon from `apps/extension/public/icons/icon-128.png`;
 - at least one production UI screenshot without the development banner;
 - the public URL for [`PRIVACY.md`](../PRIVACY.md), hosted where the Chrome Web Store reviewer can access it;
