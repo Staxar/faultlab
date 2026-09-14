@@ -708,7 +708,8 @@ function App() {
         </div>
         <span className="field-hint issue-hint">
           Console, runtime, Promise, and network failures stay local to this
-          browser.
+          browser. Review URLs, messages, and screenshots before sharing
+          reports.
         </span>
         {visibleFindings.length > 0 && (
           <div className="issues-list">

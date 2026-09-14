@@ -24,9 +24,9 @@ source URLs, and timestamps under `faultlab.runtime`. These values can contain s
 application data. The recorder does not persist request bodies or form values. GraphQL request data and
 matched JSON response bodies may be read transiently in memory when discovery or mutation is active.
 
-Authorization, Cookie, email, and token redaction is not currently implemented. Do not add export, AI, or
-server integrations until URL/query redaction, explicit retention controls, and response-body handling are
-designed and tested.
+Basic token and sensitive-query redaction is implemented for Markdown export, but it is not a complete
+data-loss-prevention system. Do not add AI or server integrations until richer URL/query redaction,
+explicit retention controls, and response-body handling are designed and tested.
 
 ## Error Monitoring
 

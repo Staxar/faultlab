@@ -136,6 +136,10 @@ Check the archive manually and upload `faultlab-0.2.0.zip`. Keep the ZIP outside
 
 Do not claim that FaultLab never observes request data: the extension reads matched response bodies locally when JSON mutation is active. Do state that the data is processed locally and is not sent to a FaultLab service.
 
+Use [PRIVACY.md](../PRIVACY.md) as the policy source and [chrome-web-store-listing.md](./chrome-web-store-listing.md)
+for the store description, permission justifications, and reviewer verification steps. Host the privacy
+policy at a public URL before submitting the item.
+
 ## Future updates
 
 For every update:
