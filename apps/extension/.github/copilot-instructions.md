@@ -38,6 +38,8 @@ Implementation details:
 - Keep core exports browser-neutral; put Chrome debugger and storage integration under `apps/extension/src`.
 - The background service worker is emitted as `background.js`; update `manifest.json` when permissions or entry points change.
 - Use `pnpm typecheck` for workspace checks and `pnpm build` to produce `dist/` for loading as an unpacked extension.
+- Use `pnpm dev` and open `/sidepanel.html` for fast UI feedback. The development-only Chrome mock must not
+  be imported into production behavior or treated as a real browser integration test.
 - `content/main.ts` is active for recorder navigation/click/change events and runtime/unhandled rejection
   reports. Do not add UI mutation behavior there without an explicit design and permission review.
 - Recorder and error monitoring are local, bounded, selected-tab sessions. Persist only metadata needed by

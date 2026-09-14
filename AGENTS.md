@@ -16,6 +16,8 @@
 - `pnpm typecheck` runs TypeScript checks across all workspace packages.
 - `pnpm test` runs Vitest regression tests for browser-independent core behavior.
 - `pnpm dev` starts the extension's Vite development server at `127.0.0.1`.
+- In Vite development mode, open `/sidepanel.html`; the Side Panel uses a development-only Chrome API
+	mock for rapid UI feedback. This mock does not test real Chrome Debugger, tabs, storage, or content scripts.
 - There is currently no configured linter or formatter; do not assume ESLint or Prettier commands exist. Browser adapter and UI behavior still need manual or mocked checks.
 - After a build, load `apps/extension/dist` as an unpacked extension from `chrome://extensions` when manual verification is needed.
 
