@@ -474,22 +474,34 @@ chrome.runtime.onMessage.addListener(
         return { ok: true, discovered: networkAdapter.getDiscoveredData() };
       }
       if (typedMessage.type === "CAPTURE_SCREENSHOT") {
-        const tabId =
-          state.errorMonitor.tabId ??
-          state.recorder.tabId ??
-          (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
-            ?.id;
-        if (tabId == null) {
-          return { ok: false, error: "No active tab to capture" };
-        }
-        const tab = await chrome.tabs.get(tabId);
-        if (tab.windowId == null || !tab.url?.startsWith("http")) {
-          return {
-            ok: false,
-            error: "Screenshots are available on HTTP(S) pages only",
-          };
-        }
         try {
+          let tab: chrome.tabs.Tab | undefined;
+          const preferredTabId =
+            state.errorMonitor.tabId ?? state.recorder.tabId;
+          if (preferredTabId != null) {
+            try {
+              tab = await chrome.tabs.get(preferredTabId);
+            } catch (error) {
+              console.warn(
+                "FaultLab could not find the previously selected tab; using the active tab",
+                error,
+              );
+            }
+          }
+          if (!tab) {
+            tab = (
+              await chrome.tabs.query({ active: true, currentWindow: true })
+            )[0];
+          }
+          if (!tab?.id || tab.windowId == null) {
+            return { ok: false, error: "No active tab to capture" };
+          }
+          if (!tab.url?.startsWith("http")) {
+            return {
+              ok: false,
+              error: "Screenshots are available on HTTP(S) pages only",
+            };
+          }
           const screenshotDataUrl = await chrome.tabs.captureVisibleTab(
             tab.windowId,
             { format: "jpeg", quality: 70 },

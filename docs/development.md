@@ -25,14 +25,9 @@ and provides sample requests, findings, notes, and screenshot evidence. It is in
 workflow feedback. It does not attach Chrome Debugger, mutate real responses, inspect real tabs, or test
 content-script behavior.
 
-The local workflow to exercise is:
-
-1. start recording and review sample requests and the journey timeline;
-2. start error monitoring and review grouped findings;
-3. capture a screenshot and save a note;
-4. filter findings;
-5. export Markdown or print the report to PDF;
-6. configure or create a scenario.
+Vite serves the page directly from source, so React and CSS changes appear live through hot module
+replacement. Keep the Vite process running while editing; a browser refresh is only needed if the
+development page itself gets into a stale state.
 
 ## Real extension mode
 

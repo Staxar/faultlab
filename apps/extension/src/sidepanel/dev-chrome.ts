@@ -223,22 +223,38 @@ export function installDevChrome(): void {
               ...state.errorMonitor,
               notes: [
                 ...state.errorMonitor.notes,
-                { id: `dev-note-${Date.now()}`, timestamp: Date.now(), body: message.body, ...(message.screenshotDataUrl ? { screenshotDataUrl: message.screenshotDataUrl } : {}) },
+                {
+                  id: `dev-note-${Date.now()}`,
+                  timestamp: Date.now(),
+                  body: message.body,
+                  ...(message.screenshotDataUrl ? { screenshotDataUrl: message.screenshotDataUrl } : {}),
+                },
               ].slice(-20),
             },
           };
           return response();
         case "DELETE_NOTE":
-          state = { ...state, errorMonitor: { ...state.errorMonitor, notes: state.errorMonitor.notes.filter((note) => note.id !== message.noteId) } };
+          state = {
+            ...state,
+            errorMonitor: {
+              ...state.errorMonitor,
+              notes: state.errorMonitor.notes.filter((note) => note.id !== message.noteId),
+            },
+          };
           return response();
         case "CREATE_SCENARIO_FROM_RECORDING": {
           const selected = state.recorder.requests.filter((request) => message.requestIds.includes(request.id));
           if (!selected.length) return { ok: false, error: "Select at least one recorded request" };
-          const scenario = createScenarioFromRecordedRequests(message.name, selected, `dev-custom-${Date.now()}`);
+          const scenario = createScenarioFromRecordedRequests(
+            message.name,
+            selected,
+            `dev-recorded-${Date.now()}`,
+          );
           state = { ...state, scenarios: [...state.scenarios, scenario] };
           return response();
         }
-        default:
+        case "RECORD_EVENT":
+        case "REPORT_ISSUE":
           return { ok: false, error: "Unsupported development message" };
       }
     },
